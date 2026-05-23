@@ -26,7 +26,7 @@ from typing import Any, Dict
 
 from tools.registry import tool_error, tool_result  # type: ignore
 
-from . import hi_capabilities, hi_creds, hi_tools
+from . import hi_capabilities, hi_creds, hi_push, hi_tools
 
 logger = logging.getLogger(__name__)
 
@@ -78,12 +78,61 @@ def register(ctx) -> None:  # noqa: C901 — keep wiring linear/readable
         schema=hi_tools.HI_PULL_EVENTS_SCHEMA,
         handler=hi_tools.handle_hi_pull_events,
         description=(
-            "Long-poll Hi for inbound events (pairing replies, meeting "
-            "confirmations, match updates). Pass `ack_event_ids=[...]` from a "
-            "previous response to mark events seen."
+            "Claim + fetch inbound Hi events (pairing replies, meeting confirms, "
+            "match updates). Returns immediately whether or not events are pending. "
+            "Pass `ack_event_ids=[...]` from a previous response to mark events seen."
         ),
         emoji="📨",
     )
+
+    # Push delivery (v0.2) — three opt-in tools.
+    ctx.register_tool(
+        name="hi_push_install",
+        toolset="hirey_hi",
+        schema=hi_tools.HI_PUSH_INSTALL_SCHEMA,
+        handler=hi_tools.handle_hi_push_install,
+        description=(
+            "Wire push delivery: create the local Hermes webhook subscription "
+            "+ register a `generic.event-webhook.v1` endpoint on Hi cloud. After "
+            "this, Hi POSTs inbound events to the registered URL instead of "
+            "(or in addition to) the pull path. Use `public_url` arg when "
+            "Hermes is behind a tunnel or reverse proxy."
+        ),
+        emoji="📡",
+    )
+    ctx.register_tool(
+        name="hi_push_status",
+        toolset="hirey_hi",
+        schema=hi_tools.HI_PUSH_STATUS_SCHEMA,
+        handler=hi_tools.handle_hi_push_status,
+        description=(
+            "Report whether the local webhook subscription exists and what "
+            "endpoints are registered on Hi side. Pass `trigger_test: true` "
+            "to fire a synthetic event through the delivery worker."
+        ),
+        emoji="🔍",
+    )
+    ctx.register_tool(
+        name="hi_push_remove",
+        toolset="hirey_hi",
+        schema=hi_tools.HI_PUSH_REMOVE_SCHEMA,
+        handler=hi_tools.handle_hi_push_remove,
+        description=(
+            "Disable the `generic.event-webhook.v1` endpoint on Hi side (stops "
+            "push delivery; pull keeps working). Pass "
+            "`remove_local_subscription: true` to also delete the Hermes "
+            "webhook subscription file."
+        ),
+        emoji="🗑️",
+    )
+
+    # Idempotent local-only step: make sure ~/.hermes/webhook_subscriptions.json
+    # has a `hi` entry so the URL is reserved. Hi-side registration stays
+    # explicit (user calls hi_push_install) to avoid surprise endpoint upserts.
+    try:
+        hi_push.ensure_local_subscription()
+    except Exception as exc:
+        logger.warning("hirey-hi: ensure_local_subscription failed: %s", exc)
 
     # 3. Capability tools — one Hermes tool per Hi capability.
     specs = hi_capabilities.load_or_refresh()
@@ -127,5 +176,5 @@ def register(ctx) -> None:  # noqa: C901 — keep wiring linear/readable
 
     logger.info(
         "hirey-hi: registered %d control tools + %d capability tools",
-        3, len(specs),
+        6, len(specs),
     )
