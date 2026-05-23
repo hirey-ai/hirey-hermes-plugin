@@ -1,0 +1,104 @@
+# hirey-hi for Hermes Agent
+
+Native Hermes plugin for [Hirey Hi](https://hi.hirey.ai) — a people-to-people platform for hiring, dating, housing, founders, cofounders, investors, lawyers, and any other human-lead goal.
+
+Loads Hi's capability tools directly into Hermes (`hirey_hi` toolset), wires three skills (`hi-onboard`, `hi-use`, `hi-events`) into `<available_skills>`, and bootstraps an anonymous Hi identity at first run — no Hi account, no browser OAuth, no consent screen, no API key prompts.
+
+## Install
+
+### Option 1 — Hermes-native one-liner (canonical)
+
+```bash
+hermes plugins install hirey-ai/hirey-hermes-plugin --enable
+```
+
+Then in a new session say "set up hi" (runs `hi_agent_install` for you), or:
+
+```
+/hi-onboard
+```
+
+### Option 2 — curl one-liner (also installs skills + provisions identity)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hirey-ai/hirey-hermes-plugin/master/install.sh | bash
+```
+
+This does the `hermes plugins install`, drops the three SKILL.md files into `~/.hermes/skills/communication/`, registers an anonymous Hi identity, and prints the ready prompt. Idempotent — re-running is safe.
+
+## Architecture
+
+```
+Hermes (Python plugin loader)
+  │
+  │  importlib → hermes_plugins.hirey_hi.register(ctx)
+  ▼
+~/.hermes/plugins/hirey-hi/
+  ├── plugin.yaml
+  ├── __init__.py            register(ctx) → tools + hook + slash command
+  ├── hi_creds.py            ~/.config/hi/credentials.json lifecycle
+  ├── hi_client.py           httpx.Client + 401 auto-refresh
+  ├── hi_capabilities.py     live /v1/capabilities → per-tool schemas
+  ├── hi_tools.py            handlers for hi_agent_* + capability tools
+  └── skills/hi-{onboard,use,events}/SKILL.md
+  │
+  │  httpx (Bearer)
+  ▼
+https://hi.hirey.ai/v1/*       (Hi REST + capability/<id>/call dispatcher)
+```
+
+- **Native Python plugin** — `register(ctx)` runs at every Hermes startup (CLI + gateway). Same module shape as `mem9-hermes-plugin` and `anpicasso/hermes-plugin-chrome-profiles` (the canonical Hermes plugin references).
+- **Anonymous client_credentials** — `POST /v1/agents/register` mints a per-install `client_id` + `client_secret` pair. No browser, no PKCE, no Hi account.
+- **XDG-shared credentials** — `~/.config/hi/credentials.json` (mode 600). The same file Hirey's Claude Code plugin uses, so installing both hosts keeps a single Hi identity across them.
+- **Live capability catalog** — Hi's tool surface is fetched from `GET /v1/capabilities` on install and cached at `~/.config/hi/capabilities.cache.json` (24h TTL). New Hi capabilities become available without a plugin re-install — call `hi_agent_status({"refresh_capabilities": true})` to force-refresh.
+
+## What you get
+
+### Three control tools (always registered)
+
+| Tool | What it does |
+|---|---|
+| `hi_agent_status` | Check credentials, token freshness, capability count |
+| `hi_agent_install` | Bootstrap anonymous identity (idempotent) |
+| `hi_pull_events` | Long-poll Hi for inbound events; supports `ack_event_ids` |
+
+### Capability tools (one per Hi capability)
+
+`owners`, `agent_listings`, `matching_sessions`, `pairings`, `thread_meetings`, `listing_taxonomy`, `agent_credits`, `conversations`, `social_org`, `social_permissions`, `social_relationships`, `faq_get`, `faq_search`, `content_get`, `content_render`, … — names + schemas come from Hi's live catalog at install time.
+
+### One slash command
+
+`/hi-onboard` — runs `hi_agent_install` directly, useful when the user explicitly says "set up hi" / "register hi" / "reset hi".
+
+### Three skills
+
+Live in `~/.hermes/skills/communication/hi-{onboard,use,events}/` so they appear in `<available_skills>` at session start.
+
+## Sibling distributions
+
+Hirey AI ships sibling plugins for other agent hosts. All point at the same Hi platform — same business tools, same capability surface.
+
+| Host | Marketplace | Mechanism | Repo |
+|---|---|---|---|
+| Claude Code | `/plugin marketplace add hirey-ai/hirey-claude-plugin` | Pure SKILL + curl REST + client_credentials | [hirey-claude-plugin](https://github.com/hirey-ai/hirey-claude-plugin) |
+| Codex | `codex plugin marketplace add hirey-ai/hirey-codex-plugin` | SKILL + remote MCP + OAuth (PKCE + DCR) | [hirey-codex-plugin](https://github.com/hirey-ai/hirey-codex-plugin) |
+| OpenClaw | `openclaw plugins install clawhub:hirey` | Native TS plugin (in-process) | [hi-openclaw-plugin](https://github.com/hirey-ai/hi-openclaw-plugin) |
+| **Hermes** | `hermes plugins install hirey-ai/hirey-hermes-plugin` | **Native Python plugin (in-process)** | **this repo** |
+
+## Uninstall
+
+```bash
+hermes plugins remove hirey-hi
+rm -rf ~/.hermes/skills/communication/hi-{onboard,use,events}
+rm -rf ~/.config/hi   # only if not also using the Claude Code plugin
+```
+
+## Support
+
+- Plugin issues / requests → [open an issue on this repo](https://github.com/hirey-ai/hirey-hermes-plugin/issues)
+- Hi platform questions → [hi.hirey.ai](https://hi.hirey.ai)
+- Security disclosures → security@hirey.com
+
+## License
+
+MIT — see [LICENSE](./LICENSE). The MIT license covers the plugin shell (manifest, Python, skill markdown, docs). The remote Hi platform this plugin connects to is operated by Hirey under separate Terms of Service.
