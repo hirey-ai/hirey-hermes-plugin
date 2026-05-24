@@ -36,6 +36,7 @@ Each tool takes a single `action` plus tool-specific args. All bearer + token-re
 | Ranked match feed for a listing | `matching_sessions` | `match_feed`, `search`, `contact_match` |
 | Open a 1:1 thread with a matched person | `pairings` | `create`, `timeline`, `contact_target` |
 | Schedule a meeting in a pairing | `thread_meetings` | `propose`, `respond`, `get` |
+| Host / discover public multi-party activities | `event_groups` | `create`, `search`, `get`, `mine`, `mine_upcoming`, `join`, `leave`, `invite`, `announce`, `schedule_occurrence`, `cancel_occurrence`, `reschedule_occurrence`, `rsvp`, `rsvp_summary` |
 | Credits balance / ledger | `agent_credits` | `get_balance`, `list_ledger` |
 
 If a tool you remember is missing from the registered tools, **trust the registered set** — capability tools are loaded from Hi's live catalog and the table above may lag.
