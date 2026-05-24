@@ -1,33 +1,54 @@
 # Hirey Hi is installed
 
-You now have these new tools in the `hirey_hi` toolset:
+> ⚠️ **READ THIS IF YOU INSTALLED FROM INSIDE A HERMES SESSION**
+>
+> Hermes builds the plugin tool registry **once per process at startup**. The TUI session you're in right now has a tool snapshot from before this plugin existed — it **cannot see the new `hi_*` tools**, no matter how many times you `/reset` or `hermes gateway restart`.
+>
+> **You must exit and relaunch:**
+>
+> ```
+> /quit            # or Ctrl+D
+> hermes           # relaunch
+> ```
+>
+> Then `hi_agent_install`, `hi_pull_events`, `owners`, `agent_listings`, etc. become available. Asking "set up hi" or "find me people on Hi" will route through them.
+>
+> Why this matters: until you restart, the LLM will fall back to running raw `curl` + `python3` against `https://hi.hirey.ai/v1/capabilities/...` — it works but it's ~10× slower and bypasses the plugin's token refresh + structured errors.
+>
+> This is a known Hermes upstream limitation — see [issue #15626](https://github.com/NousResearch/hermes-agent/issues/15626) for an open feature request to fix it.
+
+---
+
+## What you got
+
+New tools in the `hirey_hi` toolset:
 
 | Tool | What it does |
 |---|---|
 | `hi_agent_status` | Check whether Hi credentials are valid + how many capability tools loaded |
 | `hi_agent_install` | Bootstrap an anonymous Hi identity (zero user input) |
-| `hi_pull_events` | Long-poll Hi for inbound replies / meeting confirms / match updates |
+| `hi_pull_events` | Claim + fetch inbound Hi events (pairing replies, meeting confirms, match updates) |
+| `hi_push_install` / `hi_push_status` / `hi_push_remove` | Opt-in push delivery: Hi cloud POSTs events to your Hermes gateway instead of you polling |
 | `owners`, `agent_listings`, `matching_sessions`, `pairings`, `thread_meetings`, `listing_taxonomy`, `agent_credits`, … | One tool per Hi capability, loaded from Hi's live catalog |
 
-And three skills:
-
-- `hi-onboard` — first-time setup (calls `hi_agent_install` for you)
+And three skills (auto-loaded in `<available_skills>`):
+- `hi-onboard` — first-time setup
 - `hi-use` — listings, matching, pairings, meetings
 - `hi-events` — inbox drain
 
 ## First-time setup (one tool call)
 
-In a new Hermes session, just say:
+In a **fresh** Hermes session, just say:
 
 > "set up hi"
 
-…or directly run the slash command:
+…or directly:
 
 ```
 /hi-onboard
 ```
 
-That registers an anonymous Hi identity and caches credentials at `~/.config/hi/credentials.json` (mode 600). No Hi account, no browser, no human input.
+That calls `hi_agent_install` which registers an anonymous Hi identity at `~/.config/hi/credentials.json` (mode 600). No Hi account, no browser, no human input.
 
 ## Then ask people-shaped questions
 
@@ -37,15 +58,15 @@ That registers an anonymous Hi identity and caches credentials at `~/.config/hi/
 > "schedule a 30-min Zoom with Alex next Wednesday"
 > "any replies?"
 
-## Skills weren't picked up by my open session?
+## Optional: enable push delivery
 
-Skills are indexed at session start. In an active session, run:
+Pull is the default. To have Hi cloud POST inbound events directly to your gateway:
 
 ```
-/reload-skills
+hi_push_install({"public_url": "https://your-public-hostname/webhooks/hi"})
 ```
 
-…or just start a new session.
+If you're on a laptop behind NAT, set up an ngrok / cloudflared tunnel first. Loopback URLs are refused by default because Hi cloud cannot reach them — pass `force_register_with_loopback: true` if you just want to exercise the registration path.
 
 ## Privacy
 

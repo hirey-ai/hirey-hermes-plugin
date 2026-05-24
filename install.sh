@@ -35,6 +35,7 @@ CRED_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/hi"
 CRED_FILE="$CRED_DIR/credentials.json"
 
 CYAN='\033[1;36m'; GREEN='\033[1;32m'; YELLOW='\033[1;33m'; RED='\033[1;31m'; DIM='\033[2m'; NC='\033[0m'
+# (RED is used in the "/reset is NOT sufficient" banner at end-of-install)
 step() { printf "${CYAN}▶${NC} %s\n" "$1"; }
 ok()   { printf "${GREEN}✓${NC} %s\n" "$1"; }
 warn() { printf "${YELLOW}!${NC} %s\n" "$1" >&2; }
@@ -139,10 +140,29 @@ echo "  Plugin:       $PLUGIN_DIR"
 echo "  Skills:       $SKILLS_DIR/hi-{onboard,use,events}/"
 echo "  Credentials:  $CRED_FILE (mode 600)"
 echo
-echo "  In any Hermes session, ask:"
+# ─── IMPORTANT: TUI / gateway must restart to pick up the new tools ─────
+# Hermes plugin tool registry is built ONCE per process at startup. If you
+# installed this from inside a running TUI session, that TUI process's
+# registry is frozen — it cannot see hi_* tools until you exit + relaunch.
+# `/reset` only clears session history + re-scans skills, NOT plugin tools.
+# `hermes gateway restart` only restarts the daemon, not the TUI client.
+# Tracker: https://github.com/NousResearch/hermes-agent/issues/15626
+printf "${YELLOW}╭─ ONE MORE STEP ──────────────────────────────────────╮${NC}\n"
+printf "${YELLOW}│${NC} If you installed from inside a running Hermes TUI:    ${YELLOW}│${NC}\n"
+printf "${YELLOW}│${NC}                                                       ${YELLOW}│${NC}\n"
+printf "${YELLOW}│${NC}   1. Exit the TUI:  ${GREEN}/quit${NC} (or Ctrl+D)                ${YELLOW}│${NC}\n"
+printf "${YELLOW}│${NC}   2. Relaunch:      ${GREEN}hermes${NC}                          ${YELLOW}│${NC}\n"
+printf "${YELLOW}│${NC}                                                       ${YELLOW}│${NC}\n"
+printf "${YELLOW}│${NC} The new ${GREEN}hi_*${NC} tools only appear in a fresh TUI       ${YELLOW}│${NC}\n"
+printf "${YELLOW}│${NC} process. ${DIM}/reset${NC} alone is ${RED}NOT${NC} sufficient.            ${YELLOW}│${NC}\n"
+printf "${YELLOW}│${NC}                                                       ${YELLOW}│${NC}\n"
+printf "${YELLOW}│${NC} (If you ran this from outside Hermes, just start one  ${YELLOW}│${NC}\n"
+printf "${YELLOW}│${NC} now with ${GREEN}hermes${NC} — you're good.)                     ${YELLOW}│${NC}\n"
+printf "${YELLOW}╰───────────────────────────────────────────────────────╯${NC}\n"
+echo
+echo "  In a fresh Hermes session, just ask:"
 echo "    \"find me 5 backend engineers in Tokyo\""
 echo "    \"post a listing for a fintech cofounder\""
 echo "    \"any replies on yesterday's pairings?\""
 echo
-printf "  ${DIM}If you have a Hermes session already open, run /reload-skills to pick up the new skills.${NC}\n"
 printf "  ${DIM}To uninstall: hermes plugins remove hirey-hi && rm -rf $SKILLS_DIR/hi-{onboard,use,events} $CRED_DIR${NC}\n"

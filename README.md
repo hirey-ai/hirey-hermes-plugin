@@ -6,25 +6,40 @@ Loads Hi's capability tools directly into Hermes (`hirey_hi` toolset), wires thr
 
 ## Install
 
-### Option 1 — Hermes-native one-liner (canonical)
+### Option 1 — curl one-liner (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hirey-ai/hirey-hermes-plugin/main/install.sh | bash
+```
+
+Runs `hermes plugins install` + drops the three SKILL.md files into `~/.hermes/skills/communication/` + registers an anonymous Hi identity. Idempotent — re-running is safe.
+
+### Option 2 — Hermes-native one-liner (plugin only, no SKILL.md drop)
 
 ```bash
 hermes plugins install hirey-ai/hirey-hermes-plugin --enable
 ```
 
-Then in a new session say "set up hi" (runs `hi_agent_install` for you), or:
+> ⚠️ **If you ran either install command from inside a Hermes TUI session, you MUST exit and relaunch:**
+>
+> ```
+> /quit            # or Ctrl+D
+> hermes           # relaunch
+> ```
+>
+> Hermes builds the plugin tool registry **once per process at startup** ([issue #15626](https://github.com/NousResearch/hermes-agent/issues/15626)). The TUI you used to run the install has a stale snapshot — `/reset` won't help, `hermes gateway restart` won't help. Only a fresh TUI process picks up the new `hi_*` tools.
+>
+> If you ran the install from your own shell (not inside Hermes), just `hermes` to start — you're already good.
+
+### First-time use
+
+In a fresh Hermes session:
 
 ```
 /hi-onboard
 ```
 
-### Option 2 — curl one-liner (also installs skills + provisions identity)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/hirey-ai/hirey-hermes-plugin/master/install.sh | bash
-```
-
-This does the `hermes plugins install`, drops the three SKILL.md files into `~/.hermes/skills/communication/`, registers an anonymous Hi identity, and prints the ready prompt. Idempotent — re-running is safe.
+…or just say "set up hi" — the LLM calls `hi_agent_install` for you.
 
 ## Architecture
 
