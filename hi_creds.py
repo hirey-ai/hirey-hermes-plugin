@@ -74,15 +74,23 @@ def anonymous_register(
     *,
     platform_base_url: str = DEFAULT_PLATFORM_BASE_URL,
     display_name: str = ANON_REGISTER_DISPLAY_NAME,
+    metadata: Optional[Dict[str, Any]] = None,
     timeout: float = 15.0,
 ) -> Dict[str, Any]:
     """Register a fresh anonymous Hi agent and persist its long-lived client_credentials.
 
+    Optional metadata is forwarded to /v1/agents/register and lands on
+    agents.metadata_json — currently used for `channel_code` referrer attribution
+    when the user invoked Hi through an owner-page or invite-link prompt.
+
     Returns the saved credentials dict (no access_token yet — call refresh_token after).
     """
+    body: Dict[str, Any] = {"display_name": display_name, "agent_kind": "external"}
+    if metadata:
+        body["metadata"] = metadata
     resp = httpx.post(
         f"{platform_base_url}/v1/agents/register",
-        json={"display_name": display_name, "agent_kind": "external"},
+        json=body,
         timeout=timeout,
     )
     resp.raise_for_status()
@@ -142,18 +150,30 @@ def activate(creds: Dict[str, Any], *, timeout: float = 15.0) -> Dict[str, Any]:
     return resp.json()
 
 
-def ensure_ready(*, platform_base_url: str = DEFAULT_PLATFORM_BASE_URL) -> Dict[str, Any]:
+def ensure_ready(
+    *,
+    platform_base_url: str = DEFAULT_PLATFORM_BASE_URL,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Idempotent end-to-end bootstrap.
 
     1. Load creds; register anonymously if missing.
     2. Refresh access_token if missing / near expiry.
     3. Activate the install (no-op on subsequent calls).
 
+    Optional metadata is only used on the **first** register call (when creds
+    don't exist yet). Once an agent identity is persisted, subsequent
+    ensure_ready calls won't re-register, so passing metadata in later is a
+    no-op — callers that need to update an existing installation's metadata
+    after the fact should call /v1/agent-installation/update directly (or via
+    a separate helper). Today the only metadata field in use is `channel_code`
+    for owner-page / invite-link referrer attribution.
+
     Returns the live creds dict. Raises on platform unreachable.
     """
     creds = load()
     if creds is None or not creds.get("client_id"):
-        creds = anonymous_register(platform_base_url=platform_base_url)
+        creds = anonymous_register(platform_base_url=platform_base_url, metadata=metadata)
     if not token_is_fresh(creds):
         creds = refresh_token(creds)
         try:

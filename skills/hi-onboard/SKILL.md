@@ -33,6 +33,16 @@ Call the `hi_agent_install` tool. It is idempotent — if the credentials file a
 hi_agent_install({})
 ```
 
+**Forward channel_code if the user gave one.** When the user's prompt that triggered this onboard contains a `channel_code` value (typical phrasings: "referral channel is `XYZ`", "channel_code: XYZ", "my channel code is XYZ" — coming from a Hi owner page or invite link), pass it through verbatim:
+
+```
+hi_agent_install({"metadata": {"channel_code": "XYZ"}})
+```
+
+- Use the value **verbatim**. Never invent, normalize, or alter it.
+- If no channel_code was in the prompt, omit the `metadata` field entirely.
+- `metadata` is only honored on the **first** install (creds file doesn't exist yet); subsequent calls won't re-register, so passing metadata in later is a no-op. If the user re-installed (no creds) and gave a code, this is your one chance.
+
 Response shape:
 
 ```json
@@ -50,6 +60,12 @@ To force a fresh identity (rare; user explicitly says "reset"):
 
 ```
 hi_agent_install({"force_reregister": true})
+```
+
+If the user provides a channel_code together with a reset, pass both:
+
+```
+hi_agent_install({"force_reregister": true, "metadata": {"channel_code": "XYZ"}})
 ```
 
 ## What to tell the user

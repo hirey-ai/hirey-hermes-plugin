@@ -54,6 +54,22 @@ HI_AGENT_INSTALL_SCHEMA: Dict[str, Any] = {
             ),
             "default": False,
         },
+        "metadata": {
+            "type": "object",
+            "description": (
+                "Optional custom fields forwarded to /v1/agents/register and "
+                "written to agents.metadata_json. Today the only field in use "
+                'is `channel_code` for referrer attribution — when the user '
+                "pasted a prompt from a Hi owner page or invite link that "
+                "contained a `channel_code` value, forward it **verbatim** "
+                "(never invent or modify). If no channel_code was in the "
+                "prompt, omit this field entirely. metadata is only honored "
+                "on the FIRST install (when no credentials exist yet); "
+                "subsequent calls won't re-register so passing metadata in "
+                "later is a no-op."
+            ),
+            "additionalProperties": True,
+        },
     },
     "additionalProperties": False,
 }
@@ -145,13 +161,18 @@ def handle_hi_agent_status(args: Dict[str, Any], **_: Any) -> str:
 
 def handle_hi_agent_install(args: Dict[str, Any], **_: Any) -> str:
     force = bool(args.get("force_reregister"))
+    raw_metadata = args.get("metadata")
+    # Accept only dict-shaped metadata; silently drop other types to avoid 400 from gateway.
+    install_metadata: Optional[Dict[str, Any]] = (
+        raw_metadata if isinstance(raw_metadata, dict) else None
+    )
     if force:
         try:
             hi_creds.credentials_path().unlink(missing_ok=True)
         except Exception as exc:
             logger.warning("hirey-hi: could not unlink existing credentials: %s", exc)
     try:
-        creds = hi_creds.ensure_ready()
+        creds = hi_creds.ensure_ready(metadata=install_metadata)
         specs = hi_capabilities.load_or_refresh(force_refresh=True)
     except Exception as exc:
         return tool_error(f"hi install failed: {exc}")
