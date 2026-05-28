@@ -9,7 +9,7 @@ Loads Hi's capability tools directly into Hermes (`hirey_hi` toolset), wires thr
 ### Option 1 — curl one-liner (recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hirey-ai/hirey-hermes-plugin/main/install.sh | bash
+curl -fsSL https://hi.hirey.ai/v1/install/hermes.sh | bash
 ```
 
 Runs `hermes plugins install` + drops the three SKILL.md files into `~/.hermes/skills/communication/` + registers an anonymous Hi identity. Idempotent — re-running is safe.

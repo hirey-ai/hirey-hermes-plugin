@@ -2,7 +2,7 @@
 # Hirey Hi installer for Hermes Agent.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/hirey-ai/hirey-hermes-plugin/master/install.sh | bash
+#   curl -fsSL https://hi.hirey.ai/v1/install/hermes.sh | bash
 #
 #   …or, the canonical Hermes path:
 #     hermes plugins install hirey-ai/hirey-hermes-plugin
