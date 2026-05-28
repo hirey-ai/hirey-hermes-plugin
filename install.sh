@@ -25,7 +25,6 @@
 
 set -euo pipefail
 
-VERSION="0.1.0"
 HI_BASE="${HI_BASE:-https://hi.hirey.ai}"
 PLUGIN_REPO="${PLUGIN_REPO:-hirey-ai/hirey-hermes-plugin}"
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
@@ -48,17 +47,20 @@ done
 command -v hermes >/dev/null 2>&1 \
   || fail "'hermes' command not found in PATH. Install Hermes first (https://hermes-agent.nousresearch.com/docs/getting-started/quickstart)."
 
-step "Installing hirey-hi v${VERSION} for Hermes Agent"
+step "Installing hirey-hi for Hermes Agent"
 
 # ─── 1. Hermes plugin install ────────────────────────────────────────────
-if HERMES_HOME="$HERMES_HOME" hermes plugins list 2>/dev/null | grep -q "hirey-hi"; then
-  ok "Plugin already installed — updating"
-  HERMES_HOME="$HERMES_HOME" hermes plugins update hirey-hi || warn "plugin update returned non-zero (continuing)"
-else
-  HERMES_HOME="$HERMES_HOME" hermes plugins install "$PLUGIN_REPO" --enable \
-    || fail "hermes plugins install $PLUGIN_REPO failed"
-  ok "Plugin installed + enabled"
-fi
+# `--force` in hermes-agent CLI is documented as "Remove existing plugin and
+# reinstall": harmless when nothing's installed, recovers cleanly from stale
+# state (e.g. user `rm -rf`'d ~/.hermes/plugins/hirey-hi/ but config.yaml
+# still references it — in that state `hermes plugins list` reports absent
+# but `hermes plugins install` rejects with "Plugin 'hirey-hi' already exists"
+# and a plain install dies). One unconditional --force is more robust than
+# a fragile list-output grep gating install vs update — the table-formatted
+# `plugins list` output is not a stable parsing surface anyway.
+HERMES_HOME="$HERMES_HOME" hermes plugins install "$PLUGIN_REPO" --force --enable \
+  || fail "hermes plugins install $PLUGIN_REPO failed"
+ok "Plugin installed + enabled"
 
 PLUGIN_DIR="$HERMES_HOME/plugins/hirey-hi"
 [ -d "$PLUGIN_DIR" ] || fail "Plugin directory missing: $PLUGIN_DIR"
@@ -133,8 +135,14 @@ curl -fsS -X POST "$HI_BASE/v1/agents/activate" \
 
 # ─── Done ───────────────────────────────────────────────────────────────
 AGENT_ID=$(jq -r .agent_id "$CRED_FILE")
+# Read the actual installed plugin version from the cloned manifest.
+# Previously this banner hard-coded VERSION="0.1.0" at the top of the
+# script; that drifted from the published plugin (0.2.x at time of writing)
+# because nobody bumped it. Reading from plugin.yaml means the banner always
+# matches whatever `hermes plugins install` just put on disk.
+PLUGIN_VERSION=$(awk '/^version:[[:space:]]/{print $2; exit}' "$PLUGIN_DIR/plugin.yaml" 2>/dev/null || true)
 echo
-ok "hirey-hi is ready (agent_id=${GREEN}${AGENT_ID}${NC})"
+ok "hirey-hi${PLUGIN_VERSION:+ v$PLUGIN_VERSION} is ready (agent_id=${GREEN}${AGENT_ID}${NC})"
 echo
 echo "  Plugin:       $PLUGIN_DIR"
 echo "  Skills:       $SKILLS_DIR/hi-{onboard,use,events}/"
