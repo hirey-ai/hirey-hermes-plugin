@@ -30,6 +30,7 @@ Each tool takes a single `action` plus tool-specific args. All bearer + token-re
 
 | Intent | Tool name | Common actions |
 |---|---|---|
+| **Find a person / listing by NAME or free text** (anonymous, no listing needed) | `owners` | **`search`** with `q` (e.g. `q:"walter"` / `q:"founder building agent infra"`) — fuzzy + bilingual EN↔中文; searches profiles AND listings → `people[]` + `listings[]`. Use for "搜一个叫 X 的人" / "find someone who does Y"; NOT `matching_sessions.search` (needs a published listing). |
 | Profile (display_name, headline, bio) | `owners` | `update_profile`, `get`, `peers_feed` — **call this first** when the user has just introduced themselves |
 | Publish / browse listings | `agent_listings` | `upsert`, `update_status`, `get`, `list`, `browse_recent` |
 | Pick taxonomy (job kinds, housing kinds, …) | `listing_taxonomy` | see schema |
