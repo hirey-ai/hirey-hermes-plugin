@@ -38,7 +38,13 @@ def credentials_path() -> Path:
 
 
 def _atomic_write(path: Path, data: str, *, mode: int = 0o600) -> None:
-    tmp = path.with_suffix(path.suffix + ".tmp")
+    # Per-PROCESS temp name. The claude install.sh, the hi-onboard skill, and
+    # this module can all rewrite ~/.config/hi/credentials.json concurrently on
+    # one box (claude+hermes share the file). A SHARED temp name
+    # (credentials.json.tmp) lets two concurrent writers interleave bytes and
+    # publish a corrupt/truncated file; a unique per-PID temp isolates each
+    # write while os.replace stays atomic (last complete write wins).
+    tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
     tmp.write_text(data, encoding="utf-8")
     os.chmod(tmp, mode)
     os.replace(tmp, path)
@@ -53,6 +59,33 @@ def load() -> Optional[Dict[str, Any]]:
     except Exception as exc:
         logger.warning("hirey-hi: credentials file unreadable (%s): %s", p, exc)
         return None
+
+
+class CredentialsCorruptError(RuntimeError):
+    """Creds file is PRESENT but unusable (unreadable / bad JSON / no client_id).
+
+    Distinct from 'absent' (None) so callers NEVER silently re-register a new
+    agent over a present-but-broken identity — doing so orphans the user's agent
+    + data, and on a box that shares ~/.config/hi with the Claude plugin it
+    re-identifies BOTH hosts. Mirrors the claude install.sh refuse-on-corrupt guard.
+    """
+
+
+def load_strict() -> Optional[Dict[str, Any]]:
+    """Like load(), but RAISES CredentialsCorruptError when the file is present
+    yet unusable. Returns None ONLY when the file is genuinely absent. Use this
+    anywhere a None would otherwise trigger a re-register (ensure_ready /
+    hi_agent_install) so a transient bad read can't spawn an orphan agent."""
+    p = credentials_path()
+    if not p.exists():
+        return None
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise CredentialsCorruptError(f"{p}: unreadable / invalid JSON ({exc})") from exc
+    if not isinstance(data, dict) or not data.get("client_id"):
+        raise CredentialsCorruptError(f"{p}: present but has no client_id (corrupt/empty)")
+    return data
 
 
 def save(creds: Dict[str, Any]) -> None:
@@ -171,8 +204,11 @@ def ensure_ready(
 
     Returns the live creds dict. Raises on platform unreachable.
     """
-    creds = load()
-    if creds is None or not creds.get("client_id"):
+    # load_strict raises CredentialsCorruptError on a present-but-unusable file
+    # so we NEVER silently mint a new agent over a broken identity (orphan + data
+    # loss). Genuinely-absent (None) is the only case that registers fresh.
+    creds = load_strict()
+    if creds is None:
         creds = anonymous_register(platform_base_url=platform_base_url, metadata=metadata)
     if not token_is_fresh(creds):
         creds = refresh_token(creds)

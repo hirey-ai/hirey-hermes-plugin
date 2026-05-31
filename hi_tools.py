@@ -174,6 +174,14 @@ def handle_hi_agent_install(args: Dict[str, Any], **_: Any) -> str:
     try:
         creds = hi_creds.ensure_ready(metadata=install_metadata)
         specs = hi_capabilities.load_or_refresh(force_refresh=True)
+    except hi_creds.CredentialsCorruptError as exc:
+        return tool_error(
+            f"hi install BLOCKED: your Hi credentials file is present but unusable ({exc}). "
+            "Refusing to auto-register — that would orphan your existing agent and its data "
+            "(and, if you also use the Claude plugin, re-identify both hosts). Fix the file's "
+            "permissions or restore it from backup. Only if you intentionally want a brand-new "
+            "agent (abandoning the old one's data) call hi_agent_install with force_reregister=true."
+        )
     except Exception as exc:
         return tool_error(f"hi install failed: {exc}")
     return tool_result({

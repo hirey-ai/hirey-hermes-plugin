@@ -122,7 +122,7 @@ if [ "$NOW" -ge "$EXP_AT" ]; then
     .access_token            = $tok.access_token
     | .access_token_issued_at  = ($now | tonumber)
     | .access_token_expires_in = $tok.expires_in
-  ' "$CRED_FILE" > "$CRED_FILE.tmp" && mv "$CRED_FILE.tmp" "$CRED_FILE"
+  ' "$CRED_FILE" > "$CRED_FILE.tmp.$$" && mv "$CRED_FILE.tmp.$$" "$CRED_FILE"
   ok "Access token refreshed (expires in $(jq -r .access_token_expires_in "$CRED_FILE")s)"
 else
   ok "Cached token still valid"
