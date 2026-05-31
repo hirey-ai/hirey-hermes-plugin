@@ -103,9 +103,14 @@ Hirey AI ships sibling plugins for other agent hosts. All point at the same Hi p
 ## Uninstall
 
 ```bash
+# Default: remove the plugin/skills but KEEP ~/.config/hi (your durable Hi
+# identity) so a reinstall — or the Claude Code plugin — reuses the SAME agent.
 hermes plugins remove hirey-hi
 rm -rf ~/.hermes/skills/communication/hi-{onboard,use,events}
-rm -rf ~/.config/hi   # only if not also using the Claude Code plugin
+
+# Full reset: also erase your Hi identity (next install registers a brand-new
+# agent). Skip this if you also use the Claude Code plugin — it shares this file.
+rm -rf ~/.config/hi
 ```
 
 ## Support

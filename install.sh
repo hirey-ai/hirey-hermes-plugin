@@ -173,4 +173,6 @@ echo "    \"find me 5 backend engineers in Tokyo\""
 echo "    \"post a listing for a fintech cofounder\""
 echo "    \"any replies on yesterday's pairings?\""
 echo
-printf "  ${DIM}To uninstall: hermes plugins remove hirey-hi && rm -rf $SKILLS_DIR/hi-{onboard,use,events} $CRED_DIR${NC}\n"
+printf "  ${DIM}To uninstall (KEEPS your Hi identity so a reinstall reuses the SAME agent):${NC}\n"
+printf "      hermes plugins remove hirey-hi && rm -rf $SKILLS_DIR/hi-{onboard,use,events}\n"
+printf "  ${DIM}To ALSO erase your Hi identity (next install registers a brand-new agent): rm -rf $CRED_DIR${NC}\n"
