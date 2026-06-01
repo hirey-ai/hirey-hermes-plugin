@@ -42,6 +42,25 @@ Each tool takes a single `action` plus tool-specific args. All bearer + token-re
 
 If a tool you remember is missing from the registered tools, **trust the registered set** — capability tools are loaded from Hi's live catalog and the table above may lag.
 
+## Device identity & continuity (name your devices · move identity across machines)
+
+**Name this device** (multi-device: tell your devices apart; the label is **internal**, never shown to counterparts) — `owners` tool:
+```
+owners({"action":"set_device_label","device_label":"my workstation (Hermes)"})
+```
+
+**On phone login, tell the user what they rejoined** — `phone_binding({"action":"verify", ...})` returns `workspace_agents:[{agent_id,device_label,status,last_seen,is_self}]` + `joined_existing_workspace`. When `joined_existing_workspace=true`, say it out loud: *"You're back in your existing workspace — your listings, threads, and replies are all here, and this device can reply."* List the devices by `device_label`. Kills the "did I lose everything / am I a new agent now?" worry.
+
+**Carry identity to a NEW machine (claim re-attach)** — when the user reinstalls / switches machines / lost creds and does NOT want a brand-new empty agent. The claim endpoints are on the gateway (`/v1/agents/*`); call them from a shell with the shared bearer at `~/.config/hi/credentials.json`:
+```bash
+T=$(jq -r .access_token ~/.config/hi/credentials.json); B=https://hi.hirey.ai
+# OLD (working, phone-bound) device — mint a one-time, short-lived transfer token:
+curl -sS -X POST "$B/v1/agents/claim/export" -H "authorization: Bearer $T" -H 'content-type: application/json' --data '{}'   # → {claim_token, agent_id, expires_at}
+# NEW device (after its own bootstrap) — redeem it to become the SAME agent:
+curl -sS -X POST "$B/v1/agents/claim/redeem" -H "authorization: Bearer $T" -H 'content-type: application/json' --data '{"claim_token":"<paste>"}'  # → {ok, agent_id}; listings/threads/replies all follow
+```
+`export` requires the OLD device to be phone-bound (proof of ownership). Fallback if the old device is unreachable: phone-bind the SAME number on the new device — it rejoins the same workspace (one extra device entry).
+
 ## Profile collection (run before the first listing)
 
 When the user introduces themselves — name, role, location, 1-line intro, website — call `owners` with `action=update_profile`:
