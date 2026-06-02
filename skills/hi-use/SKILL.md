@@ -52,7 +52,7 @@ Reading + searching work on the anonymous install identity. The **owner identity
 google_link({"action":"start"})
 # → {ok, link_id, verification_url, expires_at, instructions}   (verification_url valid ~10 min)
 ```
-**Read/paste the `verification_url` to the user** to open in a **browser** and sign in with Google (you can't open a browser — the user does). Then poll until verified:
+**Read/paste the `verification_url` to the user** to open in a **browser** and sign in with Google, then wait for the **"✅ Signed in as …" success page** and reply "done" (you can't open a browser — the user does). Then poll until verified:
 ```
 google_link({"action":"poll"})
 # pending  → {ok, status:"pending"}    ← keep polling; do NOT call start again
