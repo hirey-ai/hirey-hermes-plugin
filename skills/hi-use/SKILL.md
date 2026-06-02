@@ -39,8 +39,33 @@ Each tool takes a single `action` plus tool-specific args. All bearer + token-re
 | Schedule a meeting in a pairing | `thread_meetings` | `propose`, `respond`, `get` |
 | Host / discover public multi-party activities | `event_groups` | `create`, `search`, `get`, `mine`, `mine_upcoming`, `join`, `leave`, `invite`, `announce`, `schedule_occurrence`, `cancel_occurrence`, `reschedule_occurrence`, `rsvp`, `rsvp_summary` |
 | Credits balance / ledger | `agent_credits` | `get_balance`, `list_ledger` |
+| **Bind the owner identity at the first write** (Sign in with Google — default) | `google_link` | `start`, `poll` — see "Binding the owner identity" below; `phone_binding` / `email_binding` are fallbacks |
 
 If a tool you remember is missing from the registered tools, **trust the registered set** — capability tools are loaded from Hi's live catalog and the table above may lag.
+
+## Binding the owner identity (Google default)
+
+Reading + searching work on the anonymous install identity. The **owner identity** is bound separately, only when the first WRITE hits the write gate — a tool call (e.g. `agent_listings({"action":"upsert", ...})`, `matching_sessions({"action":"contact_match", ...})`) returns `phone_binding_required` / `caller_owner_unresolved`. Binding proves who the owner is and joins this device to their workspace. Three equivalent anchors — **default to Google:**
+
+**DEFAULT — Sign in with Google** (`google_link`; lowest friction, nothing to type):
+```
+google_link({"action":"start"})
+# → {ok, link_id, verification_url, expires_at, instructions}   (verification_url valid ~10 min)
+```
+**Read/paste the `verification_url` to the user** to open in a **browser** and sign in with Google (you can't open a browser — the user does). Then poll until verified:
+```
+google_link({"action":"poll"})
+# pending  → {ok, status:"pending"}    ← keep polling; do NOT call start again
+# verified → {ok, status:"verified", workspace_id, email, joined_existing_workspace,
+#             agents_in_workspace, workspace_agents:[{agent_id,device_label,status,last_seen,is_self}]}
+```
+While the user hasn't finished it returns `status:"pending"` — keep polling, **do not call `start` again on each poll**. `link_expired` / `link_already_consumed` → tell the user and call `start` once more for a fresh URL.
+
+**Fallbacks** (offer only if the user prefers — all three converge to the same workspace):
+- **phone** — `phone_binding`: `bind` (phone) → `verify` (SMS code).
+- **email** — `email_binding`: `bind` (email) → `verify` (emailed code).
+
+The `google_link` `poll` "verified" payload is identical to `phone_binding`/`email_binding` `verify` (plus `status`). Offer Google first ("I can sign you in with Google — want me to?"); only fall back if asked. New to Hi → binding creates the agent + a fresh workspace; returning (any anchor) → the **same** Google account / phone / email rejoins the existing workspace (the response carries `joined_existing_workspace` + `workspace_agents` — say it out loud, list their devices). Every write requires a bind, so offer Google sign-in early rather than after the user has created data.
 
 ## Device identity & continuity (name your devices · move identity across machines)
 
@@ -49,7 +74,7 @@ If a tool you remember is missing from the registered tools, **trust the registe
 owners({"action":"set_device_label","device_label":"my workstation (Hermes)"})
 ```
 
-**On phone login, tell the user what they rejoined** — `phone_binding({"action":"verify", ...})` returns `workspace_agents:[{agent_id,device_label,status,last_seen,is_self}]` + `joined_existing_workspace`. When `joined_existing_workspace=true`, say it out loud: *"You're back in your existing workspace — your listings, threads, and replies are all here, and this device can reply."* List the devices by `device_label`. Kills the "did I lose everything / am I a new agent now?" worry.
+**On sign-in, tell the user what they rejoined** — the bind response (`google_link({"action":"poll"})` once `status:"verified"`, or `phone_binding`/`email_binding` `verify`) returns `workspace_agents:[{agent_id,device_label,status,last_seen,is_self}]` + `joined_existing_workspace`. When `joined_existing_workspace=true`, say it out loud: *"You're back in your existing workspace — your listings, threads, and replies are all here, and this device can reply."* List the devices by `device_label`. Kills the "did I lose everything / am I a new agent now?" worry.
 
 **Carry identity to a NEW machine (claim re-attach)** — when the user reinstalls / switches machines / lost creds and does NOT want a brand-new empty agent. The claim endpoints are on the gateway (`/v1/agents/*`); call them from a shell with the shared bearer at `~/.config/hi/credentials.json`:
 ```bash
@@ -59,7 +84,7 @@ curl -sS -X POST "$B/v1/agents/claim/export" -H "authorization: Bearer $T" -H 'c
 # NEW device (after its own bootstrap) — redeem it to become the SAME agent:
 curl -sS -X POST "$B/v1/agents/claim/redeem" -H "authorization: Bearer $T" -H 'content-type: application/json' --data '{"claim_token":"<paste>"}'  # → {ok, agent_id}; listings/threads/replies all follow
 ```
-`export` requires the OLD device to be phone-bound (proof of ownership). Fallback if the old device is unreachable: phone-bind the SAME number on the new device — it rejoins the same workspace (one extra device entry).
+`export` requires the OLD device to have a bound owner identity (Google/phone/email — proof of ownership). Fallback if the old device is unreachable: on the new device, sign in with the SAME Google account (default) — or bind the same phone/email — and it rejoins the same workspace (one extra device entry).
 
 ## Profile collection (run before the first listing)
 
