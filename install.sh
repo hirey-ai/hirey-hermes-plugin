@@ -169,9 +169,9 @@ printf "${YELLOW}│${NC} now with ${GREEN}hermes${NC} — you're good.)        
 printf "${YELLOW}╰───────────────────────────────────────────────────────╯${NC}\n"
 echo
 echo "  In a fresh Hermes session, just ask:"
-echo "    \"find me 5 backend engineers in Tokyo\""
-echo "    \"post a listing for a fintech cofounder\""
-echo "    \"any replies on yesterday's pairings?\""
+echo "    \"find me a founder in San Francisco\""
+echo "    \"post a listing for a fintech cofounder in SF\""
+echo "    \"any replies from yesterday's SF pairings?\""
 echo
 printf "  ${DIM}To uninstall (KEEPS your Hi identity so a reinstall reuses the SAME agent):${NC}\n"
 printf "      hermes plugins remove hirey-hi && rm -rf $SKILLS_DIR/hi-{onboard,use,events}\n"

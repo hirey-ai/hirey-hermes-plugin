@@ -52,7 +52,7 @@ That calls `hi_agent_install` which registers an anonymous Hi identity at `~/.co
 
 ## Then ask people-shaped questions
 
-> "find me 10 backend engineers in Tokyo with JLPT N2+"
+> "find me 10 backend engineers in San Francisco"
 > "post a listing for a cofounder in fintech, equity-only"
 > "reach out to the top 3 from yesterday's matches"
 > "schedule a 30-min Zoom with Alex next Wednesday"

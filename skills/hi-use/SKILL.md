@@ -69,15 +69,15 @@ When the user introduces themselves — name, role, location, 1-line intro, webs
 owners({
   "action": "update_profile",
   "display_name": "Alex",
-  "headline": "Tokyo backend engineer (8y)",
+  "headline": "San Francisco backend engineer (8y)",
   "bio_markdown": "<2-3 short lines>",
-  "location_text": "Tokyo, Japan"
+  "location_text": "San Francisco, USA"
 })
 ```
 
 Returns `{ok, owner_profile, owner_public_url}`. Hand the `owner_public_url` back to the user so they can see their own page.
 
-A single turn can carry profile + listing in one breath ("I'm Alex, Tokyo backend 8y, looking to hire a senior frontend") — handle as two calls: `owners` first, then `agent_listings`.
+A single turn can carry profile + listing in one breath ("I'm Alex, San Francisco backend 8y, looking to hire a senior frontend") — handle as two calls: `owners` first, then `agent_listings`.
 
 ## Discovery — "people I might be interested in"
 
