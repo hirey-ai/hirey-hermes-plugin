@@ -20,6 +20,12 @@
 #   HI_BASE         — Hi platform base URL (default: https://hi.hirey.ai)
 #   PLUGIN_REPO     — git repo or owner/name (default: hirey-ai/hirey-hermes-plugin)
 #   HERMES_HOME     — Hermes home dir (default: ~/.hermes)
+#   HI_CHANNEL_CODE — referrer/invite code from a Hi owner page or invite link;
+#                     folded into the FIRST register's metadata.channel_code so the
+#                     admin panel can attribute this install to whoever sent the
+#                     visitor. Optional — empty registers anonymously. Mirrors
+#                     host-plugins-claude/install.sh so the /invite landing page
+#                     attributes Hermes installs the same way as Claude Code.
 #
 # Idempotent: re-running is safe.
 
@@ -81,9 +87,20 @@ step "Bootstrapping anonymous Hi identity at $CRED_FILE"
 mkdir -p "$CRED_DIR" && chmod 700 "$CRED_DIR"
 
 if [ ! -f "$CRED_FILE" ] || [ -z "$(jq -er '.client_id // empty' "$CRED_FILE" 2>/dev/null)" ]; then
+  # If HI_CHANNEL_CODE is set, fold it into metadata for owner-page / invite-link
+  # attribution (mirrors host-plugins-claude/install.sh). Empty env → fully anonymous
+  # register, same as before. channel_code only lands on this first register; a later
+  # hi_agent_install({metadata}) is a no-op once creds exist, so the env var is the
+  # one reliable hook. jq builds the JSON safely (no shell-escaping bugs).
+  REG_BODY=$(jq -n --arg channel "${HI_CHANNEL_CODE:-}" '
+    {
+      display_name: "Hermes Agent (hirey-hi installer)",
+      agent_kind: "external"
+    } + (if ($channel | length) > 0 then { metadata: { channel_code: $channel } } else {} end)
+  ')
   REG=$(curl -fsS -X POST "$HI_BASE/v1/agents/register" \
     -H 'content-type: application/json' \
-    --data '{"display_name":"Hermes Agent (hirey-hi installer)","agent_kind":"external"}') \
+    --data "$REG_BODY") \
     || fail "register failed at $HI_BASE/v1/agents/register"
   printf '%s' "$REG" | jq --arg base "$HI_BASE" '{
     client_id:          .auth.client_id,
