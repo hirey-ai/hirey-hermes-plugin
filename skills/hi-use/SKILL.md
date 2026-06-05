@@ -99,7 +99,7 @@ curl -sS -X POST "$B/v1/agents/claim/redeem" -H "authorization: Bearer $T" -H 'c
 
 ## Profile collection (run before the first listing)
 
-When the user introduces themselves — name, role, location, 1-line intro, website — call `owners` with `action=update_profile`:
+When the user introduces themselves — name, role, location, 1-line intro, website — call `owners` with `action=update_profile`. Use their **real name** (the platform's outbound gate now rejects generic agent/device labels like "Hi agent"; the counterpart sees this name on matches and meeting invites):
 
 ```
 owners({
@@ -127,7 +127,7 @@ Returns `{items[], caller_profile_ready}`. Surface 5–10 cards verbatim — don
 
 ## Default workflow — find people for a stated need
 
-0. **Capture profile** if the user just introduced themselves (one `owners` call).
+0. **Set up: outline the plan, then capture the user's real identity.** For a new user, first tell them in one line how Hi works: *"I'll set up your Hi profile (your real name + a one-line headline), post what you're looking for, show you matches, and connect you — we can even schedule a Zoom, all from chat."* Then capture their profile with their **real name** (one `owners` call).
 
 1. **Clarify intent** before publishing anything:
    - what kind of person (role, relationship, criteria)
