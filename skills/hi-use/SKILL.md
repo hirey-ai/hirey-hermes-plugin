@@ -33,6 +33,9 @@ Each tool takes a single `action` plus tool-specific args. All bearer + token-re
 | **Find a person / listing by NAME or free text** (anonymous, no listing needed) | `owners` | **`search`** with `q` (e.g. `q:"walter"` / `q:"founder building agent infra"`) — fuzzy + bilingual EN↔中文; searches profiles AND listings → `people[]` + `listings[]`. Use for "搜一个叫 X 的人" / "find someone who does Y"; NOT `matching_sessions.search` (needs a published listing). |
 | Profile (display_name, headline, bio) | `owners` | `update_profile`, `get`, `peers_feed` — **call this first** when the user has just introduced themselves |
 | Publish / browse listings | `agent_listings` | `upsert`, `update_status`, `get`, `list`, `browse_recent` |
+| **Get the public URL of anything you made** (pages + share links) | `public_pages` | `get` (no args = ALL your URLs; or `ref={kind,id\|public_id}` for one thing) |
+| Create / manage the user's company page | `companies` | `create`, `update`, `get`, `archive`, `list_recent`, `list_listings` |
+| Resolve "who is this" + public URLs from any id | `agents` | `resolve` (`by`=`owner_public_id`/`company_id`/`listing_id`/…) |
 | Pick taxonomy (job kinds, housing kinds, …) | `listing_taxonomy` | see schema |
 | Ranked match feed for a listing | `matching_sessions` | `match_feed`, `search`, `contact_match` |
 | Open a 1:1 thread with a matched person | `pairings` | `create`, `timeline`, `contact_target` |
@@ -114,6 +117,24 @@ owners({
 Returns `{ok, owner_profile, owner_public_url}`. Hand the `owner_public_url` back to the user so they can see their own page.
 
 A single turn can carry profile + listing in one breath ("I'm Alex, San Francisco backend 8y, looking to hire a senior frontend") — handle as two calls: `owners` first, then `agent_listings`.
+
+## Public pages & share links — every published thing has a shareable URL
+
+Everything the user creates on Hi has a public web page they can open and forward (no login to view), all cross-linked:
+- **owner / personal page** — `hi.hirey.ai/owner/<id>` (also the "agent page" — same page),
+- **company page** — `hi.hirey.ai/company/<id>`,
+- each **listing / demand page** — `hi.hirey.ai/listing/<id>`.
+
+**Hand the URL back after every publish** — each write returns its link:
+- `agent_listings` `upsert` / `update_status` / `get` → `listing_public_url` (+ `listing_public_url_status`: `public` / `unlisted` / `private_not_shareable`; null when private or not open).
+- `owners` `update_profile` / `get` → `owner_public_url`.
+- `companies` `create` / `update` / `get` → `company.public_url` (+ `company.owner_public_url`).
+
+**When the user asks "what's my page / link?" call `public_pages`** — one place for any/all URLs:
+- `public_pages` `get` (no args) → `{owner_public_url, company_public_url, listings:[{listing_id, summary, status, listing_public_url, listing_public_url_status}]}`.
+- `public_pages` `get` with `ref={kind,id|public_id}` → `{public_url, public_url_status}` for one thing (kind = `listing` | `owner` | `agent` | `company`).
+
+A private or closed listing has no shareable URL (`public_url_status` says why) — say so instead of inventing a link.
 
 ## Discovery — "people I might be interested in"
 
