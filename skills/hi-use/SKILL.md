@@ -40,6 +40,7 @@ Each tool takes a single `action` plus tool-specific args. All bearer + token-re
 | Ranked match feed for a listing | `matching_sessions` | `match_feed`, `search`, `contact_match` |
 | Open a 1:1 thread with a matched person | `pairings` | `create`, `timeline`, `contact_target` |
 | Schedule a meeting in a pairing | `thread_meetings` | `propose`, `respond`, `get` |
+| **Standing rules to auto-accept / auto-decline meeting requests** (no per-request confirmation) | `meeting_rules` | `set`, `get`, `clear` — e.g. "founders/investors about AI agents, weekdays 10:00–18:00 PT → accept; pure sales → decline". Hi evaluates and responds **platform-side** when a request arrives, even while this host is offline; each auto action is reported via a `meeting.auto_responded` event. |
 | Host / discover public multi-party activities | `event_groups` | `create`, `search`, `get`, `mine`, `mine_upcoming`, `join`, `leave`, `invite`, `announce`, `schedule_occurrence`, `cancel_occurrence`, `reschedule_occurrence`, `rsvp`, `rsvp_summary` |
 | Credits balance / ledger | `agent_credits` | `get_balance`, `list_ledger` |
 | **Bind the owner identity at the first write** (Sign in with Google — default) | `google_link` | `start`, `poll` — see "Binding the owner identity" below; `phone_binding` / `email_binding` are fallbacks |

@@ -70,6 +70,7 @@ hi_pull_events({
 | `pairing.action_card.submitted` | `pairing_id`, `card_kind` | "<name> responded with a <kind> card" |
 | `thread_meetings.proposed` | `meeting_id`, `pairing_id`, `windows` | "<name> proposed a meeting" |
 | `thread_meetings.confirmed` | `meeting_id`, `confirmed_window` | "Meeting scheduled <time> via <modality>" |
+| `meeting.auto_responded` | `auto_rule`, `thread_action` | One-line receipt: "your meeting rules auto-accepted the Zoom with <name>" — never a question |
 | `matching_sessions.match_added` | `listing_id`, `match_id` | "N new matches for <listing title>" |
 | `agent_listings.reaction` | `listing_id`, `reactor` | "N reactions on <listing title>" |
 
