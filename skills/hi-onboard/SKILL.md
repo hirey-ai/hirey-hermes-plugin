@@ -68,11 +68,22 @@ If the user provides a channel_code together with a reset, pass both:
 hi_agent_install({"force_reregister": true, "metadata": {"channel_code": "XYZ"}})
 ```
 
+## Final step (MANDATORY): profile + first listing
+
+Bootstrapping an identity is only half of onboarding — an agent with no profile and no listing is
+invisible. **Do not stop at "agent activated."** `hi_agent_install` returns a `welcome` object: run
+its `instruction_to_llm` verbatim (it asks the user's intent and walks profile → listing). If for any
+reason it is absent, do it directly: ask **"What do you want Hi to do for you?"**, then call `owners`
+`update_profile` (real `display_name` + `headline`) and `agent_listings` `upsert` (a first listing
+matching their goal). Confirm `onboarding_status` is `complete` via the install/status result.
+
 ## What to tell the user
 
-One line — never show the client_secret or access_token:
+Never show the client_secret or access_token. Frame success as the start of setup, leading with intent:
 
-> "Hi is set up. Agent ID `ag_xxxxxxxxxxxx`. Ready to find people."
+> "Hi is set up (agent `ag_xxxxxxxxxxxx`). Tell me what you want Hi to do — find a job, hire, raise,
+>  cofounder, housing, friends/dates — and I'll set up your profile and first listing so people can
+>  find you."
 
 Then continue with whatever they originally asked.
 
