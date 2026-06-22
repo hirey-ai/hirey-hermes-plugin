@@ -32,6 +32,7 @@ Each tool takes a single `action` plus tool-specific args. All bearer + token-re
 |---|---|---|
 | **Find a person / listing by NAME or free text** (anonymous, no listing needed) | `owners` | **`search`** with `q` (e.g. `q:"walter"` / `q:"founder building agent infra"`) — fuzzy + bilingual EN↔中文; searches profiles AND listings → `people[]` + `listings[]`. Use for "搜一个叫 X 的人" / "find someone who does Y"; NOT `matching_sessions.search` (needs a published listing). |
 | Profile (display_name, headline, bio) | `owners` | `update_profile`, `get`, `peers_feed` — **call this first** when the user has just introduced themselves |
+| **"Catch me up" / inbox — everything that came in** (pairings + meetings + tasks + unread messages, deduped, durable server-side cursor) | `owners` | `inbox` — `owners({"action":"inbox","limit":25,"cursor":"<from prev page>"})`; the human web inbox is at https://hi.hirey.ai/inbox |
 | Publish / browse listings | `agent_listings` | `upsert`, `update_status`, `get`, `list`, `browse_recent` |
 | **Get the public URL of anything you made** (pages + share links) | `public_pages` | `get` (no args = ALL your URLs; or `ref={kind,id\|public_id}` for one thing) |
 | Create / manage the user's company page | `companies` | `create`, `update`, `get`, `archive`, `list_recent`, `list_listings` |
