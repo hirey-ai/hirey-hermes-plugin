@@ -32,14 +32,13 @@ Each tool takes a single `action` plus tool-specific args. All bearer + token-re
 |---|---|---|
 | **Find a person / listing by NAME or free text** (anonymous, no listing needed) | `owners` | **`search`** with `q` (e.g. `q:"walter"` / `q:"founder building agent infra"`) — fuzzy + bilingual EN↔中文; searches profiles AND listings → `people[]` + `listings[]`. Use for "搜一个叫 X 的人" / "find someone who does Y"; NOT `matching_sessions.search` (needs a published listing). |
 | Profile (display_name, headline, bio) | `owners` | `update_profile`, `get`, `peers_feed` — **call this first** when the user has just introduced themselves |
-| **"Catch me up" / inbox — everything that came in** (pairings + meetings + tasks + unread messages, deduped, durable server-side cursor) | `owners` | `inbox` — `owners({"action":"inbox","limit":25,"cursor":"<from prev page>"})`; the human web inbox is at https://hi.hirey.ai/inbox |
 | Publish / browse listings | `agent_listings` | `upsert`, `update_status`, `get`, `list`, `browse_recent` |
 | **Get the public URL of anything you made** (pages + share links) | `public_pages` | `get` (no args = ALL your URLs; or `ref={kind,id\|public_id}` for one thing) |
 | Create / manage the user's company page | `companies` | `create`, `update`, `get`, `archive`, `list_recent`, `list_listings` |
 | Resolve "who is this" + public URLs from any id | `agents` | `resolve` (`by`=`owner_public_id`/`company_id`/`listing_id`/…) |
 | Pick taxonomy (job kinds, housing kinds, …) | `listing_taxonomy` | see schema |
 | Ranked match feed for a listing | `matching_sessions` | `match_feed`, `search`, `contact_match` |
-| Open a 1:1 thread with a matched person | `pairings` | `create`, `timeline`, `contact_target` |
+| Open a 1:1 thread with a matched person | `pairings` | `create`, `timeline`, `contact_target`, **`contact_owner`** (reach an owner straight from `search`/`peers_feed` — no listing/match needed) |
 | Schedule a meeting in a pairing | `thread_meetings` | `propose`, `respond`, `get` |
 | **Standing rules to auto-accept / auto-decline meeting requests** (no per-request confirmation) | `meeting_rules` | `set`, `get`, `clear` — e.g. "founders/investors about AI agents, weekdays 10:00–18:00 PT → accept; pure sales → decline". Hi evaluates and responds **platform-side** when a request arrives, even while this host is offline; each auto action is reported via a `meeting.auto_responded` event. |
 | Host / discover public multi-party activities | `event_groups` | `create`, `search`, `get`, `mine`, `mine_upcoming`, `join`, `leave`, `invite`, `announce`, `schedule_occurrence`, `cancel_occurrence`, `reschedule_occurrence`, `rsvp`, `rsvp_summary` |
@@ -147,6 +146,16 @@ owners({"action": "peers_feed", "limit": 10})
 ```
 
 Returns `{items[], caller_profile_ready}`. Surface 5–10 cards verbatim — don't paraphrase. If `caller_profile_ready=false`, suggest a quick `update_profile` first.
+
+**Reaching one of these owners — use `contact_owner`, no listing needed.** `peers_feed` / `search` return each owner's `owner_public_url`, which carries their public id. Call `pairings({"action":"contact_owner","target_owner_public_id":<that id>,"text":"…"})` (or pass `target_owner_customer_id` / `target_agent_id`) — Hi opens the thread directly; you do **not** need a listing, a match, or `contact_match` first. You must have your own owner profile set up (run `update_profile` if you hit `caller_owner_unresolved`). Reserve the listing → matching → `contact_match` flow for acting on a specific published listing.
+
+## Find a specific person by name → search FIRST (a name in a listing ≠ that person)
+
+When the user names someone or says "find / contact / reach **<name>** [in <place>]", your FIRST call is `owners({"action":"search","q":"<name> <place>"})` (e.g. `q:"Mark Arizona"`) — **before** any match feed. Then reach them with `pairings({"action":"contact_owner","target_owner_public_id":…})` — no listing needed.
+
+- **A name inside a *listing's body* is NOT that person.** `matching_sessions` rank *listings*; a listing reading "looking for someone named Mark" is its **author's wanted counterpart**, not Mark — never present the listing's author/subject as the person searched for.
+- **Put the place in the query** — a bare common name returns a wall of unrelated people; `"Mark Arizona"` floats the right one up.
+- **Never say "there is no <name>"** until `owners({"action":"search"})` has actually run and you've reported its literal `people[]`. "Not in the match feed" ≠ "doesn't exist."
 
 ## Default workflow — find people for a stated need
 

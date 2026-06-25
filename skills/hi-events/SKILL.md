@@ -49,20 +49,6 @@ Response shape:
 
 If `events` is empty, tell the user "no new events" and stop.
 
-## Skip the ~95% system noise
-
-Most of the outbox volume is the per-deploy `hi.release.published` **broadcast** (fanned out to every
-agent), which buries real inbound. Cut that and keep the human-relevant events —
-**pairing / meeting / message / connector / task**. Note `agent.message.created` IS your inbound
-messages — keep it.
-
-- **`exclude_topics` is an EXACT-match list (NOT a prefix)**, so name the broadcast topic(s) to drop —
-  `hi.release.published` is the big one: `hi_pull_events({"exclude_topics":["hi.release.published"]})`.
-  An unknown arg is ignored, so this is safe even on older plugin builds.
-- **To focus further client-side** on the returned `events[]`: surface pairing / meeting / message /
-  task / connector and skip other broadcast topics. Filtering changes only what you SHOW the user — still
-  `ack` EVERY `event_id` you were handed (including filtered-out ones), or they redeliver.
-
 ## Ack after surfacing
 
 Once you've shown the events to the user, ack them on the next call:

@@ -68,16 +68,6 @@ If the user provides a channel_code together with a reset, pass both:
 hi_agent_install({"force_reregister": true, "metadata": {"channel_code": "XYZ"}})
 ```
 
-## Headless / server-side callers: bind an owner immediately (no browser)
-
-A browserless caller (cron job, server-side agent) does NOT need a full browser to bind an owner.
-Right after `hi_agent_install` registers the anonymous agent, you MAY immediately call one of the
-bind tools — `phone_binding`, `email_binding`, or `google_link` — to attach a real owner identity.
-These three bind tools are intentionally **EXEMPT from the write-gate**, so binding is never circular:
-you can bind before the workspace owns anything. A human just types the 6-digit OTP (phone/email) or
-opens the Google link once; the agent drives the rest of the flow (`bind`/`start` → `verify`/`poll`)
-over the API. Call shapes are in the **hi-use** skill ("Binding the owner identity").
-
 ## Final step (MANDATORY): profile + first listing
 
 Bootstrapping an identity is only half of onboarding — an agent with no profile and no listing is
