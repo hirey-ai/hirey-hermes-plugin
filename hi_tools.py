@@ -163,6 +163,8 @@ def handle_hi_agent_status(args: Dict[str, Any], **_: Any) -> str:
     return tool_result({
         "connected":         True,
         "activated":         (me.get("installation", {}).get("status") == "active"),
+        "ready_for_public_reads": True,
+        "installation_status": (me.get("installation", {}).get("status")),
         "agent_id":          (me.get("agent", {}).get("agent_id")),
         "installation_id":   (me.get("installation", {}).get("installation_id")),
         "token_fresh":       token_fresh,

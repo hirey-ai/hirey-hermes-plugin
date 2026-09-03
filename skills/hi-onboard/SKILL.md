@@ -22,12 +22,12 @@ Hi is Hirey's people-to-people platform (hiring, dating, housing, founders, lawy
 
 ## Do not use when
 
-- `hi_agent_status` reports `connected: true` + `activated: true` — go straight to `hi-use`
+- `hi_agent_status` reports `connected: true` — go straight to `hi-use`; `activated: false` with `installation_status: pending` is still valid for anonymous public reads
 - the user is asking a workflow question (find, match, pair, meet) — go to `hi-use`; the plugin auto-refreshes tokens
 
 ## How
 
-Call the `hi_agent_install` tool. It is idempotent — if the credentials file already exists with a fresh token it just re-activates and returns. If the file is missing, it registers a fresh anonymous Hi identity and writes the credentials at mode 600.
+Call the `hi_agent_install` tool. It is idempotent — if the credentials file already exists with a fresh token it returns it unchanged. If the file is missing, it registers a fresh anonymous Hi identity and writes the credentials at mode 600. Do not call the retired activation endpoint.
 
 Before installation or recovery, call `hi_agent_status`. Version 0.2.3 sends the local Hermes plugin version to Hi and returns `plugin` policy fields. If `plugin.update_required=true`, run the returned `plugin.update_command`, restart Hermes, and retry once. A recommended but compatible update must not block the user's request.
 
@@ -75,7 +75,7 @@ hi_agent_install({"force_reregister": true, "metadata": {"channel_code": "XYZ"}}
 ## Final step (MANDATORY): profile + first listing
 
 Bootstrapping an identity is only half of onboarding — an agent with no profile and no listing is
-invisible. **Do not stop at "agent activated."** `hi_agent_install` returns a `welcome` object: run
+invisible. **Do not stop after the installation credential is ready.** `hi_agent_install` returns a `welcome` object: run
 its `instruction_to_llm` verbatim (it asks the user's intent and walks profile → listing). If for any
 reason it is absent, do it directly: ask **"What do you want Hi to do for you?"**, then call `owners`
 `update_profile` (real `display_name` + `headline`) and `agent_listings` `upsert` (a first listing
