@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from . import hi_creds
+from . import hi_client, hi_creds
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,10 @@ def fetch_live(
     top-level props and the real `action` field is hidden one level down).
     """
     with httpx.Client(timeout=timeout) as c:
-        catalog = c.get(f"{platform_base_url}/v1/capabilities")
+        catalog = c.get(
+            f"{platform_base_url}/v1/capabilities",
+            headers=hi_client.plugin_headers(),
+        )
         catalog.raise_for_status()
         items = catalog.json().get("capabilities", [])
         out: List[Dict[str, Any]] = []
@@ -115,7 +118,10 @@ def fetch_live(
             if not cap_id:
                 continue
             try:
-                sch = c.get(f"{platform_base_url}/v1/capabilities/{cap_id}/schema")
+                sch = c.get(
+                    f"{platform_base_url}/v1/capabilities/{cap_id}/schema",
+                    headers=hi_client.plugin_headers(),
+                )
                 sch.raise_for_status()
                 body = sch.json()
                 # Unwrap if response is wrapped; otherwise treat body as schema.

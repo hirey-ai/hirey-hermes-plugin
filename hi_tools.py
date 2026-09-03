@@ -114,6 +114,17 @@ def _client() -> hi_client.HiClient:
 
 
 def handle_hi_agent_status(args: Dict[str, Any], **_: Any) -> str:
+    try:
+        plugin_policy = _client().plugin_policy()
+    except Exception as exc:
+        logger.warning("hirey-hi: plugin policy unavailable: %s", exc)
+        plugin_policy = {
+            "host": hi_client.PLUGIN_HOST,
+            "latest": None,
+            "minimum_supported": None,
+            "update_required": None,
+            "update_recommended": None,
+        }
     creds = hi_creds.load()
     if creds is None:
         return tool_result({
@@ -122,6 +133,7 @@ def handle_hi_agent_status(args: Dict[str, Any], **_: Any) -> str:
             "agent_id":            None,
             "next_step":           "call hi_agent_install (zero-touch, no human input).",
             "credentials_path":    str(hi_creds.credentials_path()),
+            "plugin":              plugin_policy,
         })
 
     token_fresh = hi_creds.token_is_fresh(creds)
@@ -151,11 +163,14 @@ def handle_hi_agent_status(args: Dict[str, Any], **_: Any) -> str:
     return tool_result({
         "connected":         True,
         "activated":         (me.get("installation", {}).get("status") == "active"),
+        "ready_for_public_reads": True,
+        "installation_status": (me.get("installation", {}).get("status")),
         "agent_id":          (me.get("agent", {}).get("agent_id")),
         "installation_id":   (me.get("installation", {}).get("installation_id")),
         "token_fresh":       token_fresh,
         "capability_count":  capability_count,
         "platform_base_url": creds.get("platform_base_url"),
+        "plugin":            plugin_policy,
     })
 
 

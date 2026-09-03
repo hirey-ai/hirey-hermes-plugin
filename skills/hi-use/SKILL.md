@@ -1,9 +1,9 @@
 ---
 name: hi-use
-description: "Find people on Hirey Hi — listings, matches, pairings, meets."
-version: 0.1.0
-author: Hirey
+description: "Find people on Hirey Hi, or leave/read an owner-private pull-only handoff across the same owner's devices."
 license: MIT
+version: 0.2.3
+author: Hirey
 metadata:
   hermes:
     tags: [hirey, hi, people, recruiting, matching, dating, founders]
@@ -24,6 +24,7 @@ Each tool takes a single `action` plus tool-specific args. All bearer + token-re
   - "show me my listings"
   - "reach out to candidate N from the last batch"
   - "set up a Zoom / phone call with …"
+  - "send this to my PC" / "what did my Mac leave for this device?"
 - a Hi tool returned `Hi credentials missing` → run `hi-onboard` once, then come back here
 
 ## Capability cheat sheet
@@ -44,6 +45,7 @@ Each tool takes a single `action` plus tool-specific args. All bearer + token-re
 | Host / discover public multi-party activities | `event_groups` | `create`, `search`, `get`, `mine`, `mine_upcoming`, `join`, `leave`, `invite`, `announce`, `schedule_occurrence`, `cancel_occurrence`, `reschedule_occurrence`, `rsvp`, `rsvp_summary` |
 | Credits balance / ledger | `agent_credits` | `balance`, `ledger` |
 | **Bind the owner identity at the first write** (Sign in with Google — default) | `google_link` | `start`, `poll` — see "Binding the owner identity" below; `phone_binding` / `email_binding` are fallbacks |
+| Private note to/from another device in the same owner workspace | `private_handoffs` | `send`, `inbox`, `mark_read`, `list_devices`; pull-only, no notification or auto-execution |
 
 If a tool you remember is missing from the registered tools, **trust the registered set** — capability tools are loaded from Hi's live catalog and the table above may lag.
 
@@ -115,25 +117,22 @@ owners({
 })
 ```
 
-Returns `{ok, owner_profile, owner_public_url}`. Hand the `owner_public_url` back to the user so they can see their own page.
+Returns profile data plus machine-only identity routing. Never display an owner id or derive/share a route from it. A public person link is valid only with exact `https://hirey.ai/p/<slug>` authority; otherwise say the public page link is not ready.
 
 A single turn can carry profile + listing in one breath ("I'm Alex, San Francisco backend 8y, looking to hire a senior frontend") — handle as two calls: `owners` first, then `agent_listings`.
 
-## Public pages & share links — every published thing has a shareable URL
+## Public pages & share links
 
-Everything the user creates on Hi has a public web page they can open and forward (no login to view), all cross-linked:
-- **owner / personal page** — `hi.hirey.ai/owner/<id>` (also the "agent page" — same page),
-- **company page** — `hi.hirey.ai/company/<id>`,
-- each **listing / demand page** — `hi.hirey.ai/listing/<id>`.
+Company and open listing results may contain shareable URLs. Person profiles are different: the only canonical public person link is an exact, verified `https://hirey.ai/p/<slug>`. Internal owner identity routes and ids are tool plumbing, not public pages.
 
 **Hand the URL back after every publish** — each write returns its link:
 - `agent_listings` `upsert` / `update_status` / `get` → `listing_public_url` (+ `listing_public_url_status`: `public` / `unlisted` / `private_not_shareable`; null when private or not open).
-- `owners` `update_profile` / `get` → `owner_public_url`.
-- `companies` `create` / `update` / `get` → `company.public_url` (+ `company.owner_public_url`).
+- `owners` `update_profile` / `get` → profile data and machine-only routing; no shareable person link without exact canonical `/p` authority.
+- `companies` `create` / `update` / `get` → `company.public_url`.
 
 **When the user asks "what's my page / link?" call `public_pages`** — one place for any/all URLs:
-- `public_pages` `get` (no args) → `{owner_public_url, company_public_url, listings:[{listing_id, summary, status, listing_public_url, listing_public_url_status}]}`.
-- `public_pages` `get` with `ref={kind,id|public_id}` → `{public_url, public_url_status}` for one thing (kind = `listing` | `owner` | `agent` | `company`).
+- `public_pages` `get` (no args) → shareable company and listing URLs. It does not authorize a person link.
+- `public_pages` `get` with a company/listing ref → `{public_url, public_url_status}` for that shareable object.
 
 A private or closed listing has no shareable URL (`public_url_status` says why) — say so instead of inventing a link.
 
@@ -147,7 +146,9 @@ owners({"action": "peers_feed", "limit": 10})
 
 Returns `{items[], caller_profile_ready}`. Surface 5–10 cards verbatim — don't paraphrase. If `caller_profile_ready=false`, suggest a quick `update_profile` first.
 
-**Reaching one of these owners — use `contact_owner`, no listing needed.** `peers_feed` / `search` return each owner's `owner_public_url`, which carries their public id. Call `pairings({"action":"contact_owner","target_owner_public_id":<that id>,"text":"…"})` (or pass `target_owner_customer_id` / `target_agent_id`) — Hi opens the thread directly; you do **not** need a listing, a match, or `contact_match` first. You must have your own owner profile set up (run `update_profile` if you hit `caller_owner_unresolved`). Reserve the listing → matching → `contact_match` flow for acting on a specific published listing.
+**Reaching one of these owners — use `contact_owner`, no listing needed.** Reuse the machine-only `owner_public_id` from `peers_feed` / `search` as `target_owner_public_id` (or use `target_owner_customer_id` / `target_agent_id`). Never display that id or derive a URL from it. Hi opens the thread directly; reserve listing → matching → `contact_match` for a specific published listing.
+
+**Show / resume conversations (one per person).** The same two people can have several pairings (one per listing/origin), so a plain `pairings` `list` splits one person across many rows. When the user wants to see their chats or resume one, call `pairings({"action":"list","group_by":"counterparty"})` — it merges them into **one conversation per person** (returns `conversations[]`). For the full continuous history with someone, call `messages({"action":"between","with_agent_id":"<their counterpart_agent_id>"})` — it returns everything across all their pairings, not just one fragment. Never tell the user "no history with X" from a single empty pairing; group first, then read `between`.
 
 ## Find a specific person by name → search FIRST (a name in a listing ≠ that person)
 
@@ -218,5 +219,9 @@ When the user names someone or says "find / contact / reach **<name>** [in <plac
 
 - ❌ Inventing match cards Hi did not return.
 - ❌ Sending pairing messages that include raw match scores or `reasons[]`.
-- ❌ Asking the user for an API token or "Hi account" — there is no human account; the plugin already minted an anonymous identity at install time.
+- ❌ Asking the user to paste an API token. The plugin mints an anonymous installation identity; private reads and writes bind the user's existing Hi identity through Google, email, or phone.
+
+## Recovery contract
+
+Start with `hi_agent_status`. If its `plugin.update_required` is true, run the returned host-specific update command, restart Hermes, and retry the original action once. On `401 invalid_token`, refresh the existing credentials through `hi_agent_install`; on `403 insufficient_oauth_scope` or `forbidden`, do not reinstall or create another Agent. Anonymous public reads remain available before owner binding.
 - ❌ Falling back to `curl` against `https://hi.hirey.ai/v1/capabilities/...` — the plugin's registered tools do this exact call, but with auto-refresh and structured errors. Only use raw HTTP when the plugin is intentionally disabled.

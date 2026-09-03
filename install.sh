@@ -145,11 +145,6 @@ else
   ok "Cached token still valid"
 fi
 
-TOKEN=$(jq -r .access_token "$CRED_FILE")
-curl -fsS -X POST "$HI_BASE/v1/agents/activate" \
-  -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' --data '{}' >/dev/null \
-  || warn "activation returned non-zero (likely already-active — non-fatal)"
-
 # ─── Done ───────────────────────────────────────────────────────────────
 AGENT_ID=$(jq -r .agent_id "$CRED_FILE")
 # Read the actual installed plugin version from the cloned manifest.

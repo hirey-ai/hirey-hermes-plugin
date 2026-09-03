@@ -18,6 +18,16 @@ from . import hi_creds
 
 logger = logging.getLogger(__name__)
 
+PLUGIN_HOST = "hermes"
+PLUGIN_VERSION = "0.2.3"
+
+
+def plugin_headers() -> Dict[str, str]:
+    return {
+        "x-hirey-plugin-host": PLUGIN_HOST,
+        "x-hirey-plugin-version": PLUGIN_VERSION,
+    }
+
 
 class HiAuthError(RuntimeError):
     """Raised when bearer cannot be obtained even after a refresh attempt."""
@@ -58,7 +68,11 @@ class HiClient:
         url = f"{base}/v1/capabilities/{capability_id}/call"
         resp = self._client().post(
             url,
-            headers={"authorization": f"Bearer {token}", "content-type": "application/json"},
+            headers={
+                **plugin_headers(),
+                "authorization": f"Bearer {token}",
+                "content-type": "application/json",
+            },
             json=args,
         )
         if resp.status_code == 401:
@@ -68,6 +82,7 @@ class HiClient:
                 resp = self._client().post(
                     url,
                     headers={
+                        **plugin_headers(),
                         "authorization": f"Bearer {creds['access_token']}",
                         "content-type": "application/json",
                     },
@@ -90,7 +105,7 @@ class HiClient:
         url = f"{base}{path}"
         resp = self._client().get(
             url,
-            headers={"authorization": f"Bearer {token}"},
+            headers={**plugin_headers(), "authorization": f"Bearer {token}"},
             params=params,
         )
         if resp.status_code == 401:
@@ -99,7 +114,10 @@ class HiClient:
                 creds = hi_creds.refresh_token(creds)
                 resp = self._client().get(
                     url,
-                    headers={"authorization": f"Bearer {creds['access_token']}"},
+                    headers={
+                        **plugin_headers(),
+                        "authorization": f"Bearer {creds['access_token']}",
+                    },
                     params=params,
                 )
         if resp.status_code >= 400:
@@ -119,7 +137,11 @@ class HiClient:
         url = f"{base}{path}"
         resp = self._client().post(
             url,
-            headers={"authorization": f"Bearer {token}", "content-type": "application/json"},
+            headers={
+                **plugin_headers(),
+                "authorization": f"Bearer {token}",
+                "content-type": "application/json",
+            },
             json=body or {},
         )
         if resp.status_code == 401:
@@ -129,6 +151,7 @@ class HiClient:
                 resp = self._client().post(
                     url,
                     headers={
+                        **plugin_headers(),
                         "authorization": f"Bearer {creds['access_token']}",
                         "content-type": "application/json",
                     },
@@ -145,3 +168,17 @@ class HiClient:
                 body=rb,
             )
         return resp.json()
+
+    def plugin_policy(self) -> Dict[str, Any]:
+        """Read the public host-specific release policy without requiring login."""
+        creds = hi_creds.load() or {}
+        base = creds.get("platform_base_url") or hi_creds.DEFAULT_PLATFORM_BASE_URL
+        resp = self._client().get(
+            f"{base}/v1/capabilities",
+            headers=plugin_headers(),
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        meta = body.get("_meta") if isinstance(body, dict) else None
+        policy = meta.get("hirey_plugin") if isinstance(meta, dict) else None
+        return policy if isinstance(policy, dict) else {}

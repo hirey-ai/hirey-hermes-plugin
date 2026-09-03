@@ -170,19 +170,6 @@ def refresh_token(creds: Dict[str, Any], *, timeout: float = 15.0) -> Dict[str, 
     return creds
 
 
-def activate(creds: Dict[str, Any], *, timeout: float = 15.0) -> Dict[str, Any]:
-    """Idempotent `POST /v1/agents/activate` — moves install pending → active."""
-    base = creds.get("platform_base_url") or DEFAULT_PLATFORM_BASE_URL
-    resp = httpx.post(
-        f"{base}/v1/agents/activate",
-        headers={"authorization": f"Bearer {creds['access_token']}"},
-        json={},
-        timeout=timeout,
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
 def ensure_ready(
     *,
     platform_base_url: str = DEFAULT_PLATFORM_BASE_URL,
@@ -192,7 +179,10 @@ def ensure_ready(
 
     1. Load creds; register anonymously if missing.
     2. Refresh access_token if missing / near expiry.
-    3. Activate the install (no-op on subsequent calls).
+
+    A pending installation is intentionally ready for anonymous public reads.
+    Identity binding, rather than a client-side activation call, unlocks private
+    Workspace reads and writes.
 
     Optional metadata is only used on the **first** register call (when creds
     don't exist yet). Once an agent identity is persisted, subsequent
@@ -212,11 +202,4 @@ def ensure_ready(
         creds = anonymous_register(platform_base_url=platform_base_url, metadata=metadata)
     if not token_is_fresh(creds):
         creds = refresh_token(creds)
-        try:
-            activate(creds)
-        except httpx.HTTPStatusError as exc:
-            logger.warning(
-                "hirey-hi: activate failed (status=%s body=%s) — token is fresh, continuing",
-                exc.response.status_code, exc.response.text[:200],
-            )
     return creds
