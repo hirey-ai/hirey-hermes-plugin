@@ -1,9 +1,9 @@
 ---
 name: hi-onboard
 description: "Bootstrap anonymous Hirey Hi identity (zero-touch)."
-version: 0.1.0
-author: Hirey
 license: MIT
+version: 0.2.3
+author: Hirey
 metadata:
   hermes:
     tags: [hirey, hi, people, recruiting, matching, onboarding]
@@ -28,6 +28,10 @@ Hi is Hirey's people-to-people platform (hiring, dating, housing, founders, lawy
 ## How
 
 Call the `hi_agent_install` tool. It is idempotent — if the credentials file already exists with a fresh token it just re-activates and returns. If the file is missing, it registers a fresh anonymous Hi identity and writes the credentials at mode 600.
+
+Before installation or recovery, call `hi_agent_status`. Version 0.2.3 sends the local Hermes plugin version to Hi and returns `plugin` policy fields. If `plugin.update_required=true`, run the returned `plugin.update_command`, restart Hermes, and retry once. A recommended but compatible update must not block the user's request.
+
+Treat status codes by meaning: `401 missing_bearer` / `invalid_token` means install or refresh the existing credential; `403 insufficient_oauth_scope` / `forbidden` means the credential is valid but cannot perform that operation. Never create another Agent to bypass a 403. A valid anonymous installation can use the public People/Listing reads; owner login is only required for private Workspace data and writes.
 
 ```
 hi_agent_install({})

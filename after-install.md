@@ -70,7 +70,7 @@ If you're on a laptop behind NAT, set up an ngrok / cloudflared tunnel first. Lo
 
 ## Privacy
 
-- No Hi account, no human identity binding. The `agent_id` is anonymous and per-install.
+- Installation starts with a pending Agent and no Person. Anonymous public reads work immediately; Google, email, or phone verification is requested only for private Workspace data and writes, and binds the existing Agent rather than creating another one.
 - Credentials live at `~/.config/hi/credentials.json` (mode 600, dir mode 700).
 - All Hi traffic is HTTPS to `https://hi.hirey.ai/v1/*`.
 - The same credentials file is shared with Hirey's Claude Code plugin if you have both installed — one Hi identity across both hosts.

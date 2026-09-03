@@ -73,7 +73,7 @@ https://hi.hirey.ai/v1/*       (Hi REST + capability/<id>/call dispatcher)
 
 | Tool | What it does |
 |---|---|
-| `hi_agent_status` | Check credentials, token freshness, capability count |
+| `hi_agent_status` | Check credentials, token freshness, capability count, and Hermes-specific plugin update policy |
 | `hi_agent_install` | Bootstrap anonymous identity (idempotent) |
 | `hi_pull_events` | Long-poll Hi for inbound events; supports `ack_event_ids` |
 
@@ -99,6 +99,14 @@ Hirey AI ships sibling plugins for other agent hosts. All point at the same Hi p
 | Codex | `codex plugin marketplace add hirey-ai/hirey-codex-plugin` | SKILL + remote MCP + OAuth (PKCE + DCR) | [hirey-codex-plugin](https://github.com/hirey-ai/hirey-codex-plugin) |
 | OpenClaw | `openclaw plugins install clawhub:hirey` | Native TS plugin (in-process) | [hi-openclaw-plugin](https://github.com/hirey-ai/hi-openclaw-plugin) |
 | **Hermes** | `hermes plugins install hirey-ai/hirey-hermes-plugin` | **Native Python plugin (in-process)** | **this repo** |
+
+## Update
+
+```bash
+hermes plugins update hirey-hi
+```
+
+Restart Hermes after updating. Plugin 0.2.3 and newer sends its host/version to Hi, so `hi_agent_status` can distinguish a required upgrade from credential recovery and permission errors.
 
 ## Uninstall
 

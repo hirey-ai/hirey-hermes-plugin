@@ -1,9 +1,9 @@
 ---
 name: hi-events
 description: "Drain inbound Hirey Hi events (replies, meeting confirms)."
-version: 0.1.0
-author: Hirey
 license: MIT
+version: 0.2.3
+author: Hirey
 metadata:
   hermes:
     tags: [hirey, hi, events, inbox, replies, meetings]
