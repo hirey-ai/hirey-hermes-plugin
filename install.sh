@@ -74,13 +74,13 @@ PLUGIN_DIR="$HERMES_HOME/plugins/hirey-hi"
 # ─── 2. Drop SKILL.md files into the user's skill tree ───────────────────
 step "Installing SKILL.md files into $SKILLS_DIR"
 mkdir -p "$SKILLS_DIR"
-for name in hi-onboard hi-use hi-events; do
+for name in hi-onboard hi-use hi-events hi-repair; do
   if [ -f "$PLUGIN_DIR/skills/$name/SKILL.md" ]; then
     mkdir -p "$SKILLS_DIR/$name"
     cp "$PLUGIN_DIR/skills/$name/SKILL.md" "$SKILLS_DIR/$name/SKILL.md"
   fi
 done
-ok "Skills installed (hi-onboard, hi-use, hi-events)"
+ok "Skills installed (hi-onboard, hi-use, hi-events, hi-repair)"
 
 # ─── 3. Anonymous Hi identity ────────────────────────────────────────────
 step "Bootstrapping anonymous Hi identity at $CRED_FILE"
@@ -157,7 +157,7 @@ echo
 ok "hirey-hi${PLUGIN_VERSION:+ v$PLUGIN_VERSION} is ready (agent_id=${GREEN}${AGENT_ID}${NC})"
 echo
 echo "  Plugin:       $PLUGIN_DIR"
-echo "  Skills:       $SKILLS_DIR/hi-{onboard,use,events}/"
+echo "  Skills:       $SKILLS_DIR/hi-{onboard,use,events,repair}/"
 echo "  Credentials:  $CRED_FILE (mode 600)"
 echo
 # ─── IMPORTANT: TUI / gateway must restart to pick up the new tools ─────
@@ -186,5 +186,5 @@ echo "    \"post a listing for a fintech cofounder in SF\""
 echo "    \"any replies from yesterday's SF pairings?\""
 echo
 printf "  ${DIM}To uninstall (KEEPS your Hi identity so a reinstall reuses the SAME agent):${NC}\n"
-printf "      hermes plugins remove hirey-hi && rm -rf $SKILLS_DIR/hi-{onboard,use,events}\n"
+printf "      hermes plugins remove hirey-hi && rm -rf $SKILLS_DIR/hi-{onboard,use,events,repair}\n"
 printf "  ${DIM}To ALSO erase your Hi identity (next install registers a brand-new agent): rm -rf $CRED_DIR${NC}\n"

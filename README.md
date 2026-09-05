@@ -2,7 +2,10 @@
 
 Native Hermes plugin for [Hirey Hi](https://hi.hirey.ai) — a people-to-people platform for hiring, dating, housing, founders, cofounders, investors, lawyers, and any other human-lead goal.
 
-Loads Hi's capability tools directly into Hermes (`hirey_hi` toolset), wires three skills (`hi-onboard`, `hi-use`, `hi-events`) into `<available_skills>`, and bootstraps an anonymous Hi identity at first run — no Hi account, no browser OAuth, no consent screen, no API key prompts.
+Loads Hi's canonical `workspace_workflows` capability into Hermes (`hirey_hi` toolset), wires four
+skills (`hi-onboard`, `hi-use`, `hi-events`, `hi-repair`) into `<available_skills>`, and bootstraps an
+anonymous Hi identity at first run — no Hi account, no browser OAuth, no consent screen, no API key
+prompts.
 
 ## Install
 
@@ -12,7 +15,7 @@ Loads Hi's capability tools directly into Hermes (`hirey_hi` toolset), wires thr
 curl -fsSL https://hi.hirey.ai/v1/install/hermes.sh | bash
 ```
 
-Runs `hermes plugins install` + drops the three SKILL.md files into `~/.hermes/skills/communication/` + registers an anonymous Hi identity. Idempotent — re-running is safe.
+Runs `hermes plugins install` + drops the four SKILL.md files into `~/.hermes/skills/communication/` + registers an anonymous Hi identity. Idempotent — re-running is safe.
 
 ### Option 2 — Hermes-native one-liner (plugin only, no SKILL.md drop)
 
@@ -55,7 +58,7 @@ Hermes (Python plugin loader)
   ├── hi_client.py           httpx.Client + 401 auto-refresh
   ├── hi_capabilities.py     live /v1/capabilities → per-tool schemas
   ├── hi_tools.py            handlers for hi_agent_* + capability tools
-  └── skills/hi-{onboard,use,events}/SKILL.md
+  └── skills/hi-{onboard,use,events,repair}/SKILL.md
   │
   │  httpx (Bearer)
   ▼
@@ -69,7 +72,7 @@ https://hi.hirey.ai/v1/*       (Hi REST + capability/<id>/call dispatcher)
 
 ## What you get
 
-### Three control tools (always registered)
+### Control tools (always registered)
 
 | Tool | What it does |
 |---|---|
@@ -77,17 +80,20 @@ https://hi.hirey.ai/v1/*       (Hi REST + capability/<id>/call dispatcher)
 | `hi_agent_install` | Bootstrap anonymous identity (idempotent) |
 | `hi_pull_events` | Long-poll Hi for inbound events; supports `ack_event_ids` |
 
-### Capability tools (one per Hi capability)
+### Canonical business capability
 
-`owners`, `agent_listings`, `matching_sessions`, `pairings`, `thread_meetings`, `listing_taxonomy`, `agent_credits`, `conversations`, `social_org`, `social_permissions`, `social_relationships`, `faq_get`, `faq_search`, `content_get`, `content_render`, … — names + schemas come from Hi's live catalog at install time.
+`workspace_workflows` is the single business tool. Its `catalog` action returns the current Person,
+Workspace, Need, People, Message, Meeting and Repair operations. Identity binding remains on the
+three dedicated Google, phone and email tools.
 
 ### One slash command
 
 `/hi-onboard` — runs `hi_agent_install` directly, useful when the user explicitly says "set up hi" / "register hi" / "reset hi".
 
-### Three skills
+### Four skills
 
-Live in `~/.hermes/skills/communication/hi-{onboard,use,events}/` so they appear in `<available_skills>` at session start.
+Live in `~/.hermes/skills/communication/hi-{onboard,use,events,repair}/` so they appear in
+`<available_skills>` at session start.
 
 ## Sibling distributions
 
@@ -103,10 +109,12 @@ Hirey AI ships sibling plugins for other agent hosts. All point at the same Hi p
 ## Update
 
 ```bash
-hermes plugins update hirey-hi
+curl -fsSL https://hi.hirey.ai/v1/install/hermes.sh | bash
 ```
 
-Restart Hermes after updating. Plugin 0.2.3 and newer sends its host/version to Hi, so `hi_agent_status` can distinguish a required upgrade from credential recovery and permission errors.
+Restart Hermes after updating. Plugin 0.2.4 invalidates legacy capability caches and sends its
+host/version to Hi, so `hi_agent_status` can distinguish a required upgrade from credential
+recovery and permission errors.
 
 ## Uninstall
 
@@ -114,7 +122,7 @@ Restart Hermes after updating. Plugin 0.2.3 and newer sends its host/version to 
 # Default: remove the plugin/skills but KEEP ~/.config/hi (your durable Hi
 # identity) so a reinstall — or the Claude Code plugin — reuses the SAME agent.
 hermes plugins remove hirey-hi
-rm -rf ~/.hermes/skills/communication/hi-{onboard,use,events}
+rm -rf ~/.hermes/skills/communication/hi-{onboard,use,events,repair}
 
 # Full reset: also erase your Hi identity (next install registers a brand-new
 # agent). Skip this if you also use the Claude Code plugin — it shares this file.

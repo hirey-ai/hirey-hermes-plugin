@@ -29,7 +29,10 @@ logger = logging.getLogger(__name__)
 
 
 CAPABILITIES_CACHE_TTL_SECONDS = 24 * 3600
-CAPABILITIES_CACHE_FORMAT_VERSION = 2  # bumped in v0.2.2: schema wrap fix + pipe-enum promotion
+# v3 hard-cuts the retired one-tool-per-domain catalog. Existing v2 caches may
+# still contain owners/agent_listings/etc. and would keep calling 404 routes for
+# up to 24 hours after an upgrade, so they must be discarded immediately.
+CAPABILITIES_CACHE_FORMAT_VERSION = 3
 
 
 def cache_path() -> Path:

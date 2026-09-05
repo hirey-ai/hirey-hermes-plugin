@@ -10,7 +10,7 @@ Register-time work:
 
   1. Bootstrap / refresh credentials if needed (idempotent, network-OK).
   2. Load capability catalog from disk cache (live-fetch on TTL expiry).
-  3. ctx.register_tool(...) for three control tools + one tool per Hi capability.
+  3. ctx.register_tool(...) for six control tools + one tool per Hi capability.
   4. ctx.register_command(...) for `/hi-onboard` (operator convenience).
   5. ctx.register_hook("on_session_start", ...) to silently refresh expiring tokens.
 
@@ -142,7 +142,7 @@ def register(ctx) -> None:  # noqa: C901 — keep wiring linear/readable
     except Exception as exc:
         logger.warning("hirey-hi: ensure_local_subscription failed: %s", exc)
 
-    # 3. Capability tools — one Hermes tool per Hi capability.
+    # 3. Capability tools — one Hermes tool per current Hi capability.
     specs = hi_capabilities.load_or_refresh()
     for spec in specs:
         cap_id    = spec["capability_id"]

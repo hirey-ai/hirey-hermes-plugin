@@ -11,7 +11,7 @@
 > hermes           # relaunch
 > ```
 >
-> Then `hi_agent_install`, `hi_pull_events`, `owners`, `agent_listings`, etc. become available. Asking "set up hi" or "find me people on Hi" will route through them.
+> Then `hi_agent_install`, `hi_agent_status`, and the canonical `workspace_workflows` tool become available. Asking "set up hi" or "find me people on Hi" will route through them.
 >
 > Why this matters: until you restart, the LLM will fall back to running raw `curl` + `python3` against `https://hi.hirey.ai/v1/capabilities/...` — it works but it's ~10× slower and bypasses the plugin's token refresh + structured errors.
 >
@@ -29,12 +29,13 @@ New tools in the `hirey_hi` toolset:
 | `hi_agent_install` | Bootstrap an anonymous Hi identity (zero user input) |
 | `hi_pull_events` | Claim + fetch inbound Hi events (pairing replies, meeting confirms, match updates) |
 | `hi_push_install` / `hi_push_status` / `hi_push_remove` | Opt-in push delivery: Hi cloud POSTs events to your Hermes gateway instead of you polling |
-| `owners`, `agent_listings`, `matching_sessions`, `pairings`, `thread_meetings`, `listing_taxonomy`, `agent_credits`, … | One tool per Hi capability, loaded from Hi's live catalog |
+| `workspace_workflows` | One canonical business tool; call its live `catalog` action first |
 
-And three skills (auto-loaded in `<available_skills>`):
+And four skills (auto-loaded in `<available_skills>`):
 - `hi-onboard` — first-time setup
-- `hi-use` — listings, matching, pairings, meetings
-- `hi-events` — inbox drain
+- `hi-use` — Person, Workspace, listings, matching, pairings and meetings
+- `hi-events` — canonical business Inbox
+- `hi-repair` — Product Signal and bounded repair workflow
 
 ## First-time setup (one tool call)
 

@@ -19,7 +19,7 @@ from . import hi_creds
 logger = logging.getLogger(__name__)
 
 PLUGIN_HOST = "hermes"
-PLUGIN_VERSION = "0.2.3"
+PLUGIN_VERSION = "0.2.4"
 
 
 def plugin_headers() -> Dict[str, str]:
