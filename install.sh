@@ -20,18 +20,17 @@
 #   HI_BASE         — Hi platform base URL (default: https://hi.hirey.ai)
 #   PLUGIN_REPO     — git repo or owner/name (default: hirey-ai/hirey-hermes-plugin)
 #   HERMES_HOME     — Hermes home dir (default: ~/.hermes)
-#   HI_CHANNEL_CODE — referrer/invite code from a Hi owner page or invite link;
-#                     folded into the FIRST register's metadata.channel_code so the
-#                     admin panel can attribute this install to whoever sent the
-#                     visitor. Optional — empty registers anonymously. Mirrors
-#                     host-plugins-claude/install.sh so the /invite landing page
-#                     attributes Hermes installs the same way as Claude Code.
+#   HI_CHANNEL_CODE — legacy input; nonempty values block new registration because
+#                     the modern API-key bootstrap cannot persist attribution.
 #
 # Idempotent: re-running is safe.
 
 set -euo pipefail
+umask 077
 
+HI_BASE_EXPLICIT="${HI_BASE:-}"
 HI_BASE="${HI_BASE:-https://hi.hirey.ai}"
+HI_BASE="${HI_BASE%/}"
 PLUGIN_REPO="${PLUGIN_REPO:-hirey-ai/hirey-hermes-plugin}"
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 SKILLS_CATEGORY="${SKILLS_CATEGORY:-communication}"
@@ -52,6 +51,39 @@ for bin in curl jq; do
 done
 command -v hermes >/dev/null 2>&1 \
   || fail "'hermes' command not found in PATH. Install Hermes first (https://hermes-agent.nousresearch.com/docs/getting-started/quickstart)."
+
+# Claude and Hermes share this identity. A broken file must never be treated
+# as a new installation, and concurrent installers must not create two agents.
+mkdir -p "$CRED_DIR" && chmod 700 "$CRED_DIR"
+LOCK_DIR="$CRED_DIR/.register.lock"
+LOCK_WAIT=0
+until mkdir "$LOCK_DIR" 2>/dev/null; do
+  LOCK_WAIT=$((LOCK_WAIT + 1))
+  [ "$LOCK_WAIT" -lt 30 ] || fail "Another Hi installer holds $LOCK_DIR; retry after it completes."
+  sleep 1
+done
+STAGED_CRED=""
+cleanup() {
+  if [ -n "$STAGED_CRED" ]; then rm -f "$STAGED_CRED"; fi
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+trap cleanup EXIT
+if [ -e "$CRED_FILE" ] || [ -L "$CRED_FILE" ]; then
+  jq -e 'type == "object" and
+    (.client_id | type == "string" and length > 0) and
+    (.client_secret | type == "string" and length > 0) and
+    (.audience | type == "string" and length > 0)' "$CRED_FILE" >/dev/null 2>&1 \
+    || fail "Existing Hi credentials are unusable; restore them before retrying. Refusing to register another identity."
+  STORED_BASE=$(jq -er '.platform_base_url // "https://hi.hirey.ai" | select(type == "string" and length > 0)' "$CRED_FILE") \
+    || fail "Stored Hi environment is invalid."
+  STORED_BASE="${STORED_BASE%/}"
+  if [ -n "$HI_BASE_EXPLICIT" ] && [ "$HI_BASE" != "$STORED_BASE" ]; then
+    fail "HI_BASE differs from the existing credential environment; use a separate XDG_CONFIG_HOME."
+  fi
+  HI_BASE="$STORED_BASE"
+fi
+printf '%s' "$HI_BASE" | jq -R -e 'test("^https://[^/?#@]+$|^http://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:[0-9]+)?$")' >/dev/null \
+  || fail "Hi requires HTTPS except for an explicit loopback test endpoint."
 
 step "Installing hirey-hi for Hermes Agent"
 
@@ -74,48 +106,50 @@ PLUGIN_DIR="$HERMES_HOME/plugins/hirey-hi"
 # ─── 2. Drop SKILL.md files into the user's skill tree ───────────────────
 step "Installing SKILL.md files into $SKILLS_DIR"
 mkdir -p "$SKILLS_DIR"
-for name in hi-onboard hi-use hi-events; do
+for name in hi-onboard hi-use hi-events hi-repair; do
   if [ -f "$PLUGIN_DIR/skills/$name/SKILL.md" ]; then
     mkdir -p "$SKILLS_DIR/$name"
     cp "$PLUGIN_DIR/skills/$name/SKILL.md" "$SKILLS_DIR/$name/SKILL.md"
   fi
 done
-ok "Skills installed (hi-onboard, hi-use, hi-events)"
+ok "Skills installed (hi-onboard, hi-use, hi-events, hi-repair)"
 
 # ─── 3. Anonymous Hi identity ────────────────────────────────────────────
 step "Bootstrapping anonymous Hi identity at $CRED_FILE"
 mkdir -p "$CRED_DIR" && chmod 700 "$CRED_DIR"
 
-if [ ! -f "$CRED_FILE" ] || [ -z "$(jq -er '.client_id // empty' "$CRED_FILE" 2>/dev/null)" ]; then
-  # If HI_CHANNEL_CODE is set, fold it into metadata for owner-page / invite-link
-  # attribution (mirrors host-plugins-claude/install.sh). Empty env → fully anonymous
-  # register, same as before. channel_code only lands on this first register; a later
-  # hi_agent_install({metadata}) is a no-op once creds exist, so the env var is the
-  # one reliable hook. jq builds the JSON safely (no shell-escaping bugs).
-  REG_BODY=$(jq -n --arg channel "${HI_CHANNEL_CODE:-}" '
-    {
-      display_name: "Hermes Agent (hirey-hi installer)",
-      agent_kind: "external"
-    } + (if ($channel | length) > 0 then { metadata: { channel_code: $channel } } else {} end)
-  ')
-  REG=$(curl -fsS -X POST "$HI_BASE/v1/agents/register" \
+if [ ! -f "$CRED_FILE" ]; then
+  [ -z "${HI_CHANNEL_CODE:-}" ] || fail "Referral channel metadata is not supported by current bootstrap; no registration was attempted."
+  PENDING_FILE="$CRED_DIR/.registration-pending.json"
+  [ ! -e "$PENDING_FILE" ] || fail "Previous registration outcome is uncertain; reconcile it before retrying."
+  # The server does not promise idempotent registration. Keep this non-secret
+  # marker on every failure, including timeouts and malformed success responses.
+  printf '%s\n' '{"status":"outcome_unknown","host":"hermes"}' > "$PENDING_FILE"
+  REG_BODY='{"agent_type":"hermes","client_version":"0.2.4","display_name":"Hermes Agent (hirey-hi installer)"}'
+  REG=$(curl -fsS --connect-timeout 5 --max-time 30 -X POST "$HI_BASE/v1/agents/api-keys" \
     -H 'content-type: application/json' \
     --data "$REG_BODY") \
-    || fail "register failed at $HI_BASE/v1/agents/register"
-  printf '%s' "$REG" | jq --arg base "$HI_BASE" '{
-    client_id:          .auth.client_id,
-    client_secret:      .auth.client_secret,
-    agent_id:           .agent.agent_id,
-    installation_id:    .installation.installation_id,
-    issuer:             .auth.issuer,
-    audience:           .auth.audience,
-    token_url:          .auth.token_url,
-    platform_base_url:  $base,
-    access_token:           null,
-    access_token_issued_at: 0,
-    access_token_expires_in: 0
-  }' > "$CRED_FILE"
-  chmod 600 "$CRED_FILE"
+    || fail "Registration outcome uncertain; reconcile the pending attempt before retrying."
+  STAGED_CRED=$(mktemp "$CRED_DIR/credentials.stage.XXXXXX")
+  printf '%s' "$REG" | jq -e --arg base "$HI_BASE" '
+    . as $body | select(type == "object" and .status == "pending"
+      and (.agent_id | type == "string" and length > 0)
+      and (.api_key | type == "string" and test("^hi_ak_[A-Za-z0-9_-]+$"))) |
+    (.api_key[6:] | gsub("-"; "+") | gsub("_"; "/") |
+      . + ("=" * ((4 - (length % 4)) % 4)) | @base64d | fromjson) as $key |
+    select($key | type == "object" and .v == 1
+      and (.id | type == "string" and length > 0 and length <= 100)
+      and (.secret | type == "string" and length > 0 and length <= 500)) |
+    {client_id:$key.id, client_secret:$key.secret, agent_id:$body.agent_id,
+     status:"pending", audience:"hirey-hi", token_url:($base + "/oauth/token"),
+     platform_base_url:$base, access_token:null,
+     access_token_issued_at:0, access_token_expires_in:0}
+  ' > "$STAGED_CRED" 2>/dev/null \
+    || fail "Invalid registration response; reconcile the pending attempt before retrying."
+  chmod 600 "$STAGED_CRED"
+  mv "$STAGED_CRED" "$CRED_FILE"
+  STAGED_CRED=""
+  rm -f "$PENDING_FILE"
   ok "Anonymous agent registered: $(jq -r .agent_id "$CRED_FILE")"
 else
   ok "Existing credentials kept — agent_id=$(jq -r .agent_id "$CRED_FILE")"
@@ -130,16 +164,23 @@ if [ "$NOW" -ge "$EXP_AT" ]; then
   CID=$(jq -r .client_id "$CRED_FILE")
   CSEC=$(jq -r .client_secret "$CRED_FILE")
   AUD=$(jq -r .audience "$CRED_FILE")
-  TOK=$(curl -fsS -X POST "$HI_BASE/oauth/token" \
-    --data "grant_type=client_credentials&client_id=$CID&client_secret=$CSEC&audience=$AUD") \
+  TOK=$(curl -fsS --connect-timeout 5 --max-time 30 -X POST "$HI_BASE/oauth/token" \
+    --data-urlencode 'grant_type=client_credentials' --data-urlencode "client_id=$CID" \
+    --data-urlencode "client_secret=$CSEC" --data-urlencode "audience=$AUD") \
     || fail "token endpoint unreachable"
-  [ -n "$(printf '%s' "$TOK" | jq -r '.access_token // empty')" ] \
-    || fail "token endpoint returned no access_token: $TOK"
+  printf '%s' "$TOK" | jq -e '
+    (.access_token | type == "string" and length > 0) and
+    (.expires_in | type == "number" and . > 0)' >/dev/null \
+    || fail "token endpoint returned an invalid token response"
+  STAGED_CRED=$(mktemp "$CRED_DIR/credentials.stage.XXXXXX")
   jq --argjson tok "$TOK" --arg now "$NOW" '
     .access_token            = $tok.access_token
     | .access_token_issued_at  = ($now | tonumber)
     | .access_token_expires_in = $tok.expires_in
-  ' "$CRED_FILE" > "$CRED_FILE.tmp.$$" && mv "$CRED_FILE.tmp.$$" "$CRED_FILE" && chmod 600 "$CRED_FILE"
+  ' "$CRED_FILE" > "$STAGED_CRED"
+  chmod 600 "$STAGED_CRED"
+  mv "$STAGED_CRED" "$CRED_FILE"
+  STAGED_CRED=""
   ok "Access token refreshed (expires in $(jq -r .access_token_expires_in "$CRED_FILE")s)"
 else
   ok "Cached token still valid"
@@ -157,7 +198,7 @@ echo
 ok "hirey-hi${PLUGIN_VERSION:+ v$PLUGIN_VERSION} is ready (agent_id=${GREEN}${AGENT_ID}${NC})"
 echo
 echo "  Plugin:       $PLUGIN_DIR"
-echo "  Skills:       $SKILLS_DIR/hi-{onboard,use,events}/"
+echo "  Skills:       $SKILLS_DIR/hi-{onboard,use,events,repair}/"
 echo "  Credentials:  $CRED_FILE (mode 600)"
 echo
 # ─── IMPORTANT: TUI / gateway must restart to pick up the new tools ─────
@@ -186,5 +227,5 @@ echo "    \"post a listing for a fintech cofounder in SF\""
 echo "    \"any replies from yesterday's SF pairings?\""
 echo
 printf "  ${DIM}To uninstall (KEEPS your Hi identity so a reinstall reuses the SAME agent):${NC}\n"
-printf "      hermes plugins remove hirey-hi && rm -rf $SKILLS_DIR/hi-{onboard,use,events}\n"
+printf "      hermes plugins remove hirey-hi && rm -rf $SKILLS_DIR/hi-{onboard,use,events,repair}\n"
 printf "  ${DIM}To ALSO erase your Hi identity (next install registers a brand-new agent): rm -rf $CRED_DIR${NC}\n"

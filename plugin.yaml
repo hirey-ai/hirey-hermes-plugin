@@ -1,6 +1,6 @@
 manifest_version: 1
 name: hirey-hi
-version: 0.2.3
+version: 0.2.4
 description: "Hirey Hi for Hermes — find people for hiring, dating, housing, founders, lawyers. Anonymous identity, zero browser OAuth."
 author: Hirey
 homepage: https://hi.hirey.ai
@@ -9,9 +9,9 @@ kind: standalone
 provides_tools:
   - hi_agent_status
   - hi_agent_install
-  - hi_pull_events
   - hi_push_install
   - hi_push_status
   - hi_push_remove
+  - workspace_workflows
 provides_hooks:
   - on_session_start

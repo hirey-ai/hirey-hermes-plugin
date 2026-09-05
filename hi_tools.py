@@ -57,16 +57,8 @@ HI_AGENT_INSTALL_SCHEMA: Dict[str, Any] = {
         "metadata": {
             "type": "object",
             "description": (
-                "Optional custom fields forwarded to /v1/agents/register and "
-                "written to agents.metadata_json. Today the only field in use "
-                'is `channel_code` for referrer attribution — when the user '
-                "pasted a prompt from a Hi owner page or invite link that "
-                "contained a `channel_code` value, forward it **verbatim** "
-                "(never invent or modify). If no channel_code was in the "
-                "prompt, omit this field entirely. metadata is only honored "
-                "on the FIRST install (when no credentials exist yet); "
-                "subsequent calls won't re-register so passing metadata in "
-                "later is a no-op."
+                "Legacy field retained for compatibility; nonempty metadata is rejected "
+                "before registration because the modern bootstrap does not persist referrals."
             ),
             "additionalProperties": True,
         },
@@ -113,9 +105,36 @@ def _client() -> hi_client.HiClient:
     return hi_client.HiClient()
 
 
+def _api_error(exc: hi_client.HiAPIError) -> str:
+    """Expose recovery information, never arbitrary response/debug/credential fields."""
+    allowed = {
+        "error", "code", "error_code", "message", "detail", "reason", "recovery",
+        "next_step", "next_steps", "action", "instructions", "required_scope",
+        "required_scopes", "missing_scopes", "auth_url", "login_url", "recovery_url",
+        "upgrade", "upgrade_url", "update_required", "update_recommended", "_meta",
+        "hirey_plugin", "host", "name", "latest", "minimum_supported",
+        "update_command", "restart_required",
+        "next", "data", "plugin", "retryable", "command", "stale",
+    }
+
+    def select(value: Any, depth: int = 0) -> Any:
+        if depth > 6:
+            return None
+        if isinstance(value, dict):
+            return {key: select(item, depth + 1) for key, item in value.items() if key in allowed}
+        if isinstance(value, list):
+            return [select(item, depth + 1) for item in value[:50]]
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value[:8000] if isinstance(value, str) else value
+        return None
+
+    return tool_error(str(exc), status_code=exc.status_code,
+                      details=select(exc.body) if isinstance(exc.body, dict) else {})
+
+
 def handle_hi_agent_status(args: Dict[str, Any], **_: Any) -> str:
     try:
-        plugin_policy = _client().plugin_policy()
+        plugin_policy = _client().plugin_policy(force_refresh=bool(args.get("refresh_capabilities")))
     except Exception as exc:
         logger.warning("hirey-hi: plugin policy unavailable: %s", exc)
         plugin_policy = {
@@ -139,7 +158,7 @@ def handle_hi_agent_status(args: Dict[str, Any], **_: Any) -> str:
     token_fresh = hi_creds.token_is_fresh(creds)
     if not token_fresh:
         try:
-            creds = hi_creds.refresh_token(creds)
+            creds = hi_creds.refresh_token(creds, timeout=5.0)
             token_fresh = True
         except Exception as exc:
             return tool_error(f"token refresh failed: {exc}")
@@ -155,18 +174,30 @@ def handle_hi_agent_status(args: Dict[str, Any], **_: Any) -> str:
         cache = hi_capabilities.load_cache()
         capability_count = len(cache.get("capabilities", [])) if cache else None
 
+    if str(creds.get("access_token") or "").startswith("hi_ai_"):
+        return tool_result({
+            "connected": True, "activated": False, "identity_bound": False,
+            "ready_for_public_reads": True, "installation_status": "pending",
+            "agent_id": creds.get("agent_id"), "token_fresh": token_fresh,
+            "capability_count": capability_count, "plugin": plugin_policy,
+            "next_step": "Use google_link, email_binding or phone_binding only when private access is needed.",
+        })
     try:
-        me = _client().get("/v1/agents/me")
+        me = hi_client.HiClient(timeout=5.0).get("/v1/agents/me")
+    except hi_client.HiAPIError as exc:
+        return _api_error(exc)
     except Exception as exc:
         return tool_error(f"hi /v1/agents/me unreachable: {exc}")
 
+    identity_bound = bool(isinstance(me.get("person_id"), str) and me["person_id"].strip()
+                          and me.get("agent_id") == creds.get("agent_id"))
     return tool_result({
         "connected":         True,
-        "activated":         (me.get("installation", {}).get("status") == "active"),
+        "activated":         identity_bound,
+        "identity_bound":    identity_bound,
         "ready_for_public_reads": True,
-        "installation_status": (me.get("installation", {}).get("status")),
-        "agent_id":          (me.get("agent", {}).get("agent_id")),
-        "installation_id":   (me.get("installation", {}).get("installation_id")),
+        "installation_status": "active" if identity_bound else "unknown",
+        "agent_id":          me.get("agent_id") or creds.get("agent_id"),
         "token_fresh":       token_fresh,
         "capability_count":  capability_count,
         "platform_base_url": creds.get("platform_base_url"),
@@ -289,8 +320,8 @@ HI_PUSH_INSTALL_SCHEMA: Dict[str, Any] = {
             "description": (
                 "Register with Hi cloud even when the URL is loopback "
                 "(localhost / 127.x). Hi cloud cannot reach loopback addresses, "
-                "so push delivery will silently fail — events stay in the outbox "
-                "and the user falls back to `hi_pull_events`. Useful for "
+                "so push delivery will silently fail — events stay in the outbox. "
+                "Read messages with workspace_workflows agent_message.list. Useful for "
                 "exercising the registration path during testing."
             ),
             "default": False,
@@ -373,8 +404,8 @@ def handle_hi_push_install(args: Dict[str, Any], **_: Any) -> str:
         "next_step": (
             "Hi will POST inbound events to the registered URL. Run "
             "`hi_push_status({trigger_test: true})` to verify end-to-end "
-            "delivery, or call `hi_pull_events` to drain any pending events "
-            "(push and pull both work — pull is a backstop)."
+            "delivery. To check user messages, use workspace_workflows with "
+            "action=agent_message.list; transport acknowledgements belong to the delivery worker."
         ),
     })
 
@@ -445,17 +476,21 @@ def build_capability_handler(capability_id: str):
     def _handler(args: Dict[str, Any], **_: Any) -> str:
         try:
             payload = _client().call_capability(capability_id, args or {})
+            # Binding completion must rotate the pending bearer before private
+            # calls. Do not infer this from a merely pending login response.
+            result = payload.get("result", payload) if isinstance(payload, dict) else {}
+            if capability_id in ("hi.google-link", "hi.email-binding", "hi.phone-binding") and isinstance(result, dict) and result.get("status") == "verified":
+                with hi_creds.credential_lock():
+                    creds = hi_creds.load_strict()
+                    if creds is not None:
+                        creds["status"] = "active"
+                        hi_creds._refresh_token_locked(creds, timeout=15.0)
         except hi_client.HiAuthError as exc:
             return tool_error(
                 f"{exc}. Call hi_agent_install to bootstrap an anonymous Hi identity."
             )
         except hi_client.HiAPIError as exc:
-            body_excerpt = (
-                json.dumps(exc.body)[:400]
-                if isinstance(exc.body, (dict, list))
-                else str(exc.body)[:400]
-            )
-            return tool_error(f"{exc}: {body_excerpt}", status_code=exc.status_code)
+            return _api_error(exc)
         except Exception as exc:
             return tool_error(f"hi {capability_id} failed: {type(exc).__name__}: {exc}")
         return tool_result(payload)

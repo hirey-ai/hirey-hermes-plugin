@@ -10,7 +10,7 @@ Register-time work:
 
   1. Bootstrap / refresh credentials if needed (idempotent, network-OK).
   2. Load capability catalog from disk cache (live-fetch on TTL expiry).
-  3. ctx.register_tool(...) for three control tools + one tool per Hi capability.
+  3. ctx.register_tool(...) for five control tools + one tool per Hi capability.
   4. ctx.register_command(...) for `/hi-onboard` (operator convenience).
   5. ctx.register_hook("on_session_start", ...) to silently refresh expiring tokens.
 
@@ -39,12 +39,9 @@ def register(ctx) -> None:  # noqa: C901 — keep wiring linear/readable
         return
     setattr(ctx, _REGISTERED_FLAG, True)
 
-    # 1. **Don't** eagerly call ensure_ready when there are no creds — let the
-    #    user's first prompt drive `hi_agent_install` so any `channel_code`
-    #    from an owner page or invite link gets folded into the register
-    #    metadata. Eager register at plugin import time would race the LLM's
-    #    chance to forward the channel_code, losing referrer attribution
-    #    forever for that install.
+    # 1. Loading the plugin does not authorize a new identity. Defer bootstrap
+    #    until the user's task calls hi_agent_install. The modern endpoint does
+    #    not support legacy referral metadata or server-side idempotency.
     #
     #    If creds already exist (post-onboard sessions), still refresh the
     #    token so the first real Hi call in this session doesn't pay a
@@ -80,18 +77,8 @@ def register(ctx) -> None:  # noqa: C901 — keep wiring linear/readable
         ),
         emoji="🔧",
     )
-    ctx.register_tool(
-        name="hi_pull_events",
-        toolset="hirey_hi",
-        schema=hi_tools.HI_PULL_EVENTS_SCHEMA,
-        handler=hi_tools.handle_hi_pull_events,
-        description=(
-            "Claim + fetch inbound Hi events (pairing replies, meeting confirms, "
-            "match updates). Returns immediately whether or not events are pending. "
-            "Pass `ack_event_ids=[...]` from a previous response to mark events seen."
-        ),
-        emoji="📨",
-    )
+    # Claim/ack is transport plumbing, not a user-facing inbox query. Keep its
+    # handler internal; expose only the read-only agent_message.list workflow.
 
     # Push delivery (v0.2) — three opt-in tools.
     ctx.register_tool(
@@ -142,7 +129,7 @@ def register(ctx) -> None:  # noqa: C901 — keep wiring linear/readable
     except Exception as exc:
         logger.warning("hirey-hi: ensure_local_subscription failed: %s", exc)
 
-    # 3. Capability tools — one Hermes tool per Hi capability.
+    # 3. Capability tools — one Hermes tool per current Hi capability.
     specs = hi_capabilities.load_or_refresh()
     for spec in specs:
         cap_id    = spec["capability_id"]
@@ -184,5 +171,5 @@ def register(ctx) -> None:  # noqa: C901 — keep wiring linear/readable
 
     logger.info(
         "hirey-hi: registered %d control tools + %d capability tools",
-        6, len(specs),
+        5, len(specs),
     )
