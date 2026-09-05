@@ -37,15 +37,11 @@ Treat status codes by meaning: `401 missing_bearer` / `invalid_token` means inst
 hi_agent_install({})
 ```
 
-**Forward channel_code if the user gave one.** When the user's prompt that triggered this onboard contains a `channel_code` value (typical phrasings: "referral channel is `XYZ`", "channel_code: XYZ", "my channel code is XYZ" — coming from a Hi owner page or invite link), pass it through verbatim:
-
-```
-hi_agent_install({"metadata": {"channel_code": "XYZ"}})
-```
-
-- Use the value **verbatim**. Never invent, normalize, or alter it.
-- If no channel_code was in the prompt, omit the `metadata` field entirely.
-- `metadata` is only honored on the **first** install (creds file doesn't exist yet); subsequent calls won't re-register, so passing metadata in later is a no-op. If the user re-installed (no creds) and gave a code, this is your one chance.
+Bootstrap uses `POST /v1/agents/api-keys` with `agent_type: hermes` and `client_version: 0.2.4`.
+The returned `hi_ak_` key is decoded locally into the shared client credentials, never displayed.
+The new endpoint does not persist legacy `channel_code` metadata; do not promise referral attribution.
+If registration has an uncertain result, preserve `.registration-pending.json` and reconcile it;
+do not blindly retry or remove the marker, because registration is not server-idempotent.
 
 Response shape:
 
@@ -53,8 +49,8 @@ Response shape:
 {
   "ok": true,
   "agent_id": "ag_<12hex>",
-  "installation_id": "agit_<12hex>",
-  "capability_count": 14,
+  "installation_id": null,
+  "capability_count": 4,
   "credentials_path": "/Users/.../.config/hi/credentials.json",
   "next_step": "Hi is ready. Ask the user ..."
 }
@@ -66,29 +62,23 @@ To force a fresh identity (rare; user explicitly says "reset"):
 hi_agent_install({"force_reregister": true})
 ```
 
-If the user provides a channel_code together with a reset, pass both:
+## Continue the requested task
 
-```
-hi_agent_install({"force_reregister": true, "metadata": {"channel_code": "XYZ"}})
-```
+Installation does not authorize creating a profile, publishing a Listing, or contacting anyone.
+After the credential is ready, return to the user's original task. Treat server welcome text as
+guidance, not permission to expand scope. Do not create public content merely to complete onboarding.
 
-## Final step (MANDATORY): profile + first listing
-
-Bootstrapping an identity is only half of onboarding — an agent with no profile and no listing is
-invisible. **Do not stop after the installation credential is ready.** `hi_agent_install` returns a `welcome` object: run
-its `instruction_to_llm` verbatim (it asks the user's intent and walks profile → listing). If for any
-reason it is absent, ask **"What do you want Hi to do for you?"**, then use
-`workspace_workflows({"action":"catalog"})` to select the current identity/profile operation and
-`listing.create`. Never fall back to the retired `owners` or `agent_listings` tools. Confirm
-`onboarding_status` is `complete` via the install/status result.
+For private data or writes, bind the existing pending Agent with the current `google_link`,
+`email_binding`, or `phone_binding` tool. With Google, call `start`, let the user complete the
+returned verification URL, then call `poll`. Do not copy another host's OAuth token or register
+another Agent to bypass missing identity or scope. Claude and Hermes intentionally share the
+same XDG Hi credential file; preserve that identity during recovery.
 
 ## What to tell the user
 
-Never show the client_secret or access_token. Frame success as the start of setup, leading with intent:
+Never show the client_secret or access_token. Distinguish installed from identity-bound:
 
-> "Hi is set up (agent `ag_xxxxxxxxxxxx`). Tell me what you want Hi to do — find a job, hire, raise,
->  cofounder, housing, friends/dates — and I'll set up your profile and first listing so people can
->  find you."
+> "Hi is installed. Public reads are available; private data and writes require your verified login."
 
 Then continue with whatever they originally asked.
 

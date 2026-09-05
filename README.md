@@ -66,7 +66,7 @@ https://hi.hirey.ai/v1/*       (Hi REST + capability/<id>/call dispatcher)
 ```
 
 - **Native Python plugin** — `register(ctx)` runs at every Hermes startup (CLI + gateway). Same module shape as `mem9-hermes-plugin` and `anpicasso/hermes-plugin-chrome-profiles` (the canonical Hermes plugin references).
-- **Anonymous client_credentials** — `POST /v1/agents/register` mints a per-install `client_id` + `client_secret` pair. No browser, no PKCE, no Hi account.
+- **Pending Agent bootstrap** — `POST /v1/agents/api-keys` with `agent_type: hermes` and the local version returns an encoded `hi_ak_` credential. Strict local decoding preserves the shared `client_id` + `client_secret` format; `/oauth/token` still uses `client_credentials`. Verified login is required only for private access. Uncertain registration outcomes are preserved locally and must be reconciled before retrying.
 - **XDG-shared credentials** — `~/.config/hi/credentials.json` (mode 600). The same file Hirey's Claude Code plugin uses, so installing both hosts keeps a single Hi identity across them.
 - **Live capability catalog** — Hi's tool surface is fetched from `GET /v1/capabilities` on install and cached at `~/.config/hi/capabilities.cache.json` (24h TTL). New Hi capabilities become available without a plugin re-install — call `hi_agent_status({"refresh_capabilities": true})` to force-refresh.
 

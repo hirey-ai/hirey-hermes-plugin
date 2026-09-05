@@ -57,16 +57,8 @@ HI_AGENT_INSTALL_SCHEMA: Dict[str, Any] = {
         "metadata": {
             "type": "object",
             "description": (
-                "Optional custom fields forwarded to /v1/agents/register and "
-                "written to agents.metadata_json. Today the only field in use "
-                'is `channel_code` for referrer attribution — when the user '
-                "pasted a prompt from a Hi owner page or invite link that "
-                "contained a `channel_code` value, forward it **verbatim** "
-                "(never invent or modify). If no channel_code was in the "
-                "prompt, omit this field entirely. metadata is only honored "
-                "on the FIRST install (when no credentials exist yet); "
-                "subsequent calls won't re-register so passing metadata in "
-                "later is a no-op."
+                "Legacy field retained for compatibility; nonempty metadata is rejected "
+                "before registration because the modern bootstrap does not persist referrals."
             ),
             "additionalProperties": True,
         },
@@ -182,6 +174,14 @@ def handle_hi_agent_status(args: Dict[str, Any], **_: Any) -> str:
         cache = hi_capabilities.load_cache()
         capability_count = len(cache.get("capabilities", [])) if cache else None
 
+    if str(creds.get("access_token") or "").startswith("hi_ai_"):
+        return tool_result({
+            "connected": True, "activated": False, "identity_bound": False,
+            "ready_for_public_reads": True, "installation_status": "pending",
+            "agent_id": creds.get("agent_id"), "token_fresh": token_fresh,
+            "capability_count": capability_count, "plugin": plugin_policy,
+            "next_step": "Use google_link, email_binding or phone_binding only when private access is needed.",
+        })
     try:
         me = hi_client.HiClient(timeout=5.0).get("/v1/agents/me")
     except hi_client.HiAPIError as exc:
@@ -189,13 +189,15 @@ def handle_hi_agent_status(args: Dict[str, Any], **_: Any) -> str:
     except Exception as exc:
         return tool_error(f"hi /v1/agents/me unreachable: {exc}")
 
+    identity_bound = bool(isinstance(me.get("person_id"), str) and me["person_id"].strip()
+                          and me.get("agent_id") == creds.get("agent_id"))
     return tool_result({
         "connected":         True,
-        "activated":         (me.get("installation", {}).get("status") == "active"),
+        "activated":         identity_bound,
+        "identity_bound":    identity_bound,
         "ready_for_public_reads": True,
-        "installation_status": (me.get("installation", {}).get("status")),
-        "agent_id":          (me.get("agent", {}).get("agent_id")),
-        "installation_id":   (me.get("installation", {}).get("installation_id")),
+        "installation_status": "active" if identity_bound else "unknown",
+        "agent_id":          me.get("agent_id") or creds.get("agent_id"),
         "token_fresh":       token_fresh,
         "capability_count":  capability_count,
         "platform_base_url": creds.get("platform_base_url"),
@@ -474,6 +476,15 @@ def build_capability_handler(capability_id: str):
     def _handler(args: Dict[str, Any], **_: Any) -> str:
         try:
             payload = _client().call_capability(capability_id, args or {})
+            # Binding completion must rotate the pending bearer before private
+            # calls. Do not infer this from a merely pending login response.
+            result = payload.get("result", payload) if isinstance(payload, dict) else {}
+            if capability_id in ("hi.google-link", "hi.email-binding", "hi.phone-binding") and isinstance(result, dict) and result.get("status") == "verified":
+                with hi_creds.credential_lock():
+                    creds = hi_creds.load_strict()
+                    if creds is not None:
+                        creds["status"] = "active"
+                        hi_creds._refresh_token_locked(creds, timeout=15.0)
         except hi_client.HiAuthError as exc:
             return tool_error(
                 f"{exc}. Call hi_agent_install to bootstrap an anonymous Hi identity."

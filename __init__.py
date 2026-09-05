@@ -39,12 +39,9 @@ def register(ctx) -> None:  # noqa: C901 — keep wiring linear/readable
         return
     setattr(ctx, _REGISTERED_FLAG, True)
 
-    # 1. **Don't** eagerly call ensure_ready when there are no creds — let the
-    #    user's first prompt drive `hi_agent_install` so any `channel_code`
-    #    from an owner page or invite link gets folded into the register
-    #    metadata. Eager register at plugin import time would race the LLM's
-    #    chance to forward the channel_code, losing referrer attribution
-    #    forever for that install.
+    # 1. Loading the plugin does not authorize a new identity. Defer bootstrap
+    #    until the user's task calls hi_agent_install. The modern endpoint does
+    #    not support legacy referral metadata or server-side idempotency.
     #
     #    If creds already exist (post-onboard sessions), still refresh the
     #    token so the first real Hi call in this session doesn't pay a
