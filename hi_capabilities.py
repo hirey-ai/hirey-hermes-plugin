@@ -39,7 +39,13 @@ def cache_path() -> Path:
     return hi_creds.credentials_dir() / "capabilities.cache.json"
 
 
-def load_cache() -> Optional[Dict[str, Any]]:
+def configured_platform_base_url() -> str:
+    creds = hi_creds.load() or {}
+    return (creds.get("platform_base_url") or hi_creds.DEFAULT_PLATFORM_BASE_URL).rstrip("/")
+
+
+def load_cache(*, platform_base_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    base = (platform_base_url or configured_platform_base_url()).rstrip("/")
     p = cache_path()
     if not p.exists():
         return None
@@ -52,6 +58,8 @@ def load_cache() -> Optional[Dict[str, Any]]:
         # Discard any cache that doesn't declare the current format version.
         if int(data.get("format_version") or 1) < CAPABILITIES_CACHE_FORMAT_VERSION:
             logger.info("hirey-hi: discarding cache (format_version too old)")
+            return None
+        if data.get("platform") != base:
             return None
         return data
     except Exception as exc:
@@ -143,14 +151,14 @@ def fetch_live(
     return out
 
 
-def save_cache(specs: List[Dict[str, Any]]) -> None:
+def save_cache(specs: List[Dict[str, Any]], *, platform_base_url: Optional[str] = None) -> None:
     d = hi_creds.credentials_dir()
     d.mkdir(parents=True, exist_ok=True)
     os.chmod(d, 0o700)
     payload = {
         "format_version": CAPABILITIES_CACHE_FORMAT_VERSION,
         "fetched_at":     int(time.time()),
-        "platform":       hi_creds.DEFAULT_PLATFORM_BASE_URL,
+        "platform":       (platform_base_url or configured_platform_base_url()).rstrip("/"),
         "capabilities":   specs,
     }
     tmp = cache_path().with_suffix(".tmp")
@@ -165,15 +173,16 @@ def load_or_refresh(*, force_refresh: bool = False) -> List[Dict[str, Any]]:
     cached-even-if-stale, or empty list if no cache exists. Never raises —
     capability tools missing is recoverable; failing register() is not.
     """
+    base = configured_platform_base_url()
     if not force_refresh:
-        cache = load_cache()
+        cache = load_cache(platform_base_url=base)
         if cache is not None and cache_is_fresh(cache):
             return cache.get("capabilities", [])
     try:
-        specs = fetch_live()
-        save_cache(specs)
+        specs = fetch_live(platform_base_url=base)
+        save_cache(specs, platform_base_url=base)
         return specs
     except Exception as exc:
         logger.warning("hirey-hi: live capability fetch failed (%s) — using stale cache if any", exc)
-        cache = load_cache()
+        cache = load_cache(platform_base_url=base)
         return (cache or {}).get("capabilities", [])
