@@ -9,7 +9,6 @@ kind: standalone
 provides_tools:
   - hi_agent_status
   - hi_agent_install
-  - hi_pull_events
   - hi_push_install
   - hi_push_status
   - hi_push_remove

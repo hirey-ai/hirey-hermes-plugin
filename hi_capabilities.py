@@ -102,7 +102,7 @@ def _promote_pipe_enums(schema: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def fetch_live(
-    *, platform_base_url: str = hi_creds.DEFAULT_PLATFORM_BASE_URL, timeout: float = 15.0
+    *, platform_base_url: str = hi_creds.DEFAULT_PLATFORM_BASE_URL, timeout: float = 5.0
 ) -> List[Dict[str, Any]]:
     """Fetch the live capability list + per-capability JSON Schema.
 
@@ -129,12 +129,14 @@ def fetch_live(
             if not cap_id:
                 continue
             try:
-                sch = c.get(
-                    f"{platform_base_url}/v1/capabilities/{cap_id}/schema",
-                    headers=hi_client.plugin_headers(),
-                )
-                sch.raise_for_status()
-                body = sch.json()
+                body = item.get("parameters")
+                if not isinstance(body, dict):
+                    sch = c.get(
+                        f"{platform_base_url}/v1/capabilities/{cap_id}/schema",
+                        headers=hi_client.plugin_headers(),
+                    )
+                    sch.raise_for_status()
+                    body = sch.json()
                 # Unwrap if response is wrapped; otherwise treat body as schema.
                 inner = body.get("schema") if isinstance(body, dict) and isinstance(body.get("schema"), dict) else body
                 schema = _promote_pipe_enums(inner if isinstance(inner, dict) else {"type": "object", "additionalProperties": True})

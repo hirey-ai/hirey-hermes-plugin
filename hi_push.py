@@ -111,6 +111,15 @@ def ensure_local_subscription() -> Dict[str, Any]:
     """
     subs = _load_subs()
     if SUBSCRIPTION_NAME in subs and subs[SUBSCRIPTION_NAME].get("secret"):
+        existing = subs[SUBSCRIPTION_NAME]
+        if existing.get("created_by") == "hirey-hi-plugin" and "hi_pull_events" in existing.get("prompt", ""):
+            existing["prompt"] = (
+                "You received a Hirey Hi event of kind `{event_type}`. Payload: {payload}. "
+                "Use the hi-events skill and workspace_workflows action=agent_message.list "
+                "to read business messages. Do not claim or acknowledge transport events; "
+                "the delivery worker owns acknowledgements."
+            )
+            _save_subs(subs)
         return subs[SUBSCRIPTION_NAME]
     subs[SUBSCRIPTION_NAME] = {
         "description": "Hirey Hi inbound events (replies, meeting confirms, match updates)",
@@ -121,8 +130,8 @@ def ensure_local_subscription() -> Dict[str, Any]:
             "```json\n{payload}\n```\n\n"
             "Surface the human-relevant fields to the user (sender, body, meeting time, "
             "listing title — whatever applies). Group multiple events by primary entity. "
-            "Then call `hi_pull_events` with the event_id in `ack_event_ids` so the event "
-            "stops redelivering."
+            "Use workspace_workflows action=agent_message.list to read business messages. "
+            "Do not claim or acknowledge transport events; the delivery worker owns acknowledgements."
         ),
         "skills": ["hi-events"],
         "deliver": "log",

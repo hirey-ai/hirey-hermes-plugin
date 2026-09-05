@@ -27,7 +27,6 @@ New tools in the `hirey_hi` toolset:
 |---|---|
 | `hi_agent_status` | Check whether Hi credentials are valid + how many capability tools loaded |
 | `hi_agent_install` | Bootstrap an anonymous Hi identity (zero user input) |
-| `hi_pull_events` | Claim + fetch inbound Hi events (pairing replies, meeting confirms, match updates) |
 | `hi_push_install` / `hi_push_status` / `hi_push_remove` | Opt-in push delivery: Hi cloud POSTs events to your Hermes gateway instead of you polling |
 | `workspace_workflows` | One canonical business tool; call its live `catalog` action first |
 

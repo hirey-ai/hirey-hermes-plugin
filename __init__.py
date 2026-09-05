@@ -10,7 +10,7 @@ Register-time work:
 
   1. Bootstrap / refresh credentials if needed (idempotent, network-OK).
   2. Load capability catalog from disk cache (live-fetch on TTL expiry).
-  3. ctx.register_tool(...) for six control tools + one tool per Hi capability.
+  3. ctx.register_tool(...) for five control tools + one tool per Hi capability.
   4. ctx.register_command(...) for `/hi-onboard` (operator convenience).
   5. ctx.register_hook("on_session_start", ...) to silently refresh expiring tokens.
 
@@ -80,18 +80,8 @@ def register(ctx) -> None:  # noqa: C901 — keep wiring linear/readable
         ),
         emoji="🔧",
     )
-    ctx.register_tool(
-        name="hi_pull_events",
-        toolset="hirey_hi",
-        schema=hi_tools.HI_PULL_EVENTS_SCHEMA,
-        handler=hi_tools.handle_hi_pull_events,
-        description=(
-            "Claim + fetch inbound Hi events (pairing replies, meeting confirms, "
-            "match updates). Returns immediately whether or not events are pending. "
-            "Pass `ack_event_ids=[...]` from a previous response to mark events seen."
-        ),
-        emoji="📨",
-    )
+    # Claim/ack is transport plumbing, not a user-facing inbox query. Keep its
+    # handler internal; expose only the read-only agent_message.list workflow.
 
     # Push delivery (v0.2) — three opt-in tools.
     ctx.register_tool(
@@ -184,5 +174,5 @@ def register(ctx) -> None:  # noqa: C901 — keep wiring linear/readable
 
     logger.info(
         "hirey-hi: registered %d control tools + %d capability tools",
-        6, len(specs),
+        5, len(specs),
     )

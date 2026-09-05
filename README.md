@@ -78,7 +78,9 @@ https://hi.hirey.ai/v1/*       (Hi REST + capability/<id>/call dispatcher)
 |---|---|
 | `hi_agent_status` | Check credentials, token freshness, capability count, and Hermes-specific plugin update policy |
 | `hi_agent_install` | Bootstrap anonymous identity (idempotent) |
-| `hi_pull_events` | Long-poll Hi for inbound events; supports `ack_event_ids` |
+| `hi_push_install` / `hi_push_status` / `hi_push_remove` | Configure and inspect opt-in push delivery |
+
+Read user messages with `workspace_workflows` (`agent_message.list`). Transport claim/ack is not exposed as an LLM tool.
 
 ### Canonical business capability
 

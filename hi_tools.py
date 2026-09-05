@@ -113,9 +113,36 @@ def _client() -> hi_client.HiClient:
     return hi_client.HiClient()
 
 
+def _api_error(exc: hi_client.HiAPIError) -> str:
+    """Expose recovery information, never arbitrary response/debug/credential fields."""
+    allowed = {
+        "error", "code", "error_code", "message", "detail", "reason", "recovery",
+        "next_step", "next_steps", "action", "instructions", "required_scope",
+        "required_scopes", "missing_scopes", "auth_url", "login_url", "recovery_url",
+        "upgrade", "upgrade_url", "update_required", "update_recommended", "_meta",
+        "hirey_plugin", "host", "name", "latest", "minimum_supported",
+        "update_command", "restart_required",
+        "next", "data", "plugin", "retryable", "command", "stale",
+    }
+
+    def select(value: Any, depth: int = 0) -> Any:
+        if depth > 6:
+            return None
+        if isinstance(value, dict):
+            return {key: select(item, depth + 1) for key, item in value.items() if key in allowed}
+        if isinstance(value, list):
+            return [select(item, depth + 1) for item in value[:50]]
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value[:8000] if isinstance(value, str) else value
+        return None
+
+    return tool_error(str(exc), status_code=exc.status_code,
+                      details=select(exc.body) if isinstance(exc.body, dict) else {})
+
+
 def handle_hi_agent_status(args: Dict[str, Any], **_: Any) -> str:
     try:
-        plugin_policy = _client().plugin_policy()
+        plugin_policy = _client().plugin_policy(force_refresh=bool(args.get("refresh_capabilities")))
     except Exception as exc:
         logger.warning("hirey-hi: plugin policy unavailable: %s", exc)
         plugin_policy = {
@@ -139,7 +166,7 @@ def handle_hi_agent_status(args: Dict[str, Any], **_: Any) -> str:
     token_fresh = hi_creds.token_is_fresh(creds)
     if not token_fresh:
         try:
-            creds = hi_creds.refresh_token(creds)
+            creds = hi_creds.refresh_token(creds, timeout=5.0)
             token_fresh = True
         except Exception as exc:
             return tool_error(f"token refresh failed: {exc}")
@@ -156,7 +183,9 @@ def handle_hi_agent_status(args: Dict[str, Any], **_: Any) -> str:
         capability_count = len(cache.get("capabilities", [])) if cache else None
 
     try:
-        me = _client().get("/v1/agents/me")
+        me = hi_client.HiClient(timeout=5.0).get("/v1/agents/me")
+    except hi_client.HiAPIError as exc:
+        return _api_error(exc)
     except Exception as exc:
         return tool_error(f"hi /v1/agents/me unreachable: {exc}")
 
@@ -289,8 +318,8 @@ HI_PUSH_INSTALL_SCHEMA: Dict[str, Any] = {
             "description": (
                 "Register with Hi cloud even when the URL is loopback "
                 "(localhost / 127.x). Hi cloud cannot reach loopback addresses, "
-                "so push delivery will silently fail — events stay in the outbox "
-                "and the user falls back to `hi_pull_events`. Useful for "
+                "so push delivery will silently fail — events stay in the outbox. "
+                "Read messages with workspace_workflows agent_message.list. Useful for "
                 "exercising the registration path during testing."
             ),
             "default": False,
@@ -373,8 +402,8 @@ def handle_hi_push_install(args: Dict[str, Any], **_: Any) -> str:
         "next_step": (
             "Hi will POST inbound events to the registered URL. Run "
             "`hi_push_status({trigger_test: true})` to verify end-to-end "
-            "delivery, or call `hi_pull_events` to drain any pending events "
-            "(push and pull both work — pull is a backstop)."
+            "delivery. To check user messages, use workspace_workflows with "
+            "action=agent_message.list; transport acknowledgements belong to the delivery worker."
         ),
     })
 
@@ -450,12 +479,7 @@ def build_capability_handler(capability_id: str):
                 f"{exc}. Call hi_agent_install to bootstrap an anonymous Hi identity."
             )
         except hi_client.HiAPIError as exc:
-            body_excerpt = (
-                json.dumps(exc.body)[:400]
-                if isinstance(exc.body, (dict, list))
-                else str(exc.body)[:400]
-            )
-            return tool_error(f"{exc}: {body_excerpt}", status_code=exc.status_code)
+            return _api_error(exc)
         except Exception as exc:
             return tool_error(f"hi {capability_id} failed: {type(exc).__name__}: {exc}")
         return tool_result(payload)

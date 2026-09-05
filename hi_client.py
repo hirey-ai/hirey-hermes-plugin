@@ -10,6 +10,7 @@ surface them to the LLM.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict, Optional
 
 import httpx
@@ -20,6 +21,9 @@ logger = logging.getLogger(__name__)
 
 PLUGIN_HOST = "hermes"
 PLUGIN_VERSION = "0.2.4"
+POLICY_TIMEOUT_SECONDS = 5.0
+POLICY_CACHE_TTL_SECONDS = 300
+_policy_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
 
 
 def plugin_headers() -> Dict[str, str]:
@@ -169,16 +173,29 @@ class HiClient:
             )
         return resp.json()
 
-    def plugin_policy(self) -> Dict[str, Any]:
+    def plugin_policy(self, *, force_refresh: bool = False) -> Dict[str, Any]:
         """Read the public host-specific release policy without requiring login."""
         creds = hi_creds.load() or {}
-        base = creds.get("platform_base_url") or hi_creds.DEFAULT_PLATFORM_BASE_URL
-        resp = self._client().get(
-            f"{base}/v1/capabilities",
-            headers=plugin_headers(),
-        )
-        resp.raise_for_status()
-        body = resp.json()
-        meta = body.get("_meta") if isinstance(body, dict) else None
-        policy = meta.get("hirey_plugin") if isinstance(meta, dict) else None
-        return policy if isinstance(policy, dict) else {}
+        base = (creds.get("platform_base_url") or hi_creds.DEFAULT_PLATFORM_BASE_URL).rstrip("/")
+        cached = _policy_cache.get(base)
+        if not force_refresh and cached and time.monotonic() - cached[0] < POLICY_CACHE_TTL_SECONDS:
+            return dict(cached[1])
+        try:
+            resp = self._client().get(
+                f"{base}/v1/capabilities",
+                headers=plugin_headers(),
+                timeout=POLICY_TIMEOUT_SECONDS,
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            meta = body.get("_meta") if isinstance(body, dict) else None
+            policy = meta.get("hirey_plugin") if isinstance(meta, dict) else None
+            if not isinstance(policy, dict):
+                raise ValueError("plugin policy missing from catalog")
+        except Exception:
+            if cached:
+                return {**cached[1], "stale": True}
+            raise
+        result = policy if isinstance(policy, dict) else {}
+        _policy_cache[base] = (time.monotonic(), dict(result))
+        return result
