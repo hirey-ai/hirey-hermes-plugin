@@ -9,7 +9,8 @@ import unittest
 
 
 class InstallerSafety(unittest.TestCase):
-    def run_install(self, contents=None, response='{}', locked=False, retry=False, channel='', base=None):
+    def run_install(self, contents=None, response='{}', locked=False, retry=False, channel='', base=None,
+                    legacy_skill=None):
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)
             bin_dir = root / 'bin'
@@ -23,6 +24,10 @@ class InstallerSafety(unittest.TestCase):
             plugin = root / 'hermes/plugins/hirey-hi'
             plugin.mkdir(parents=True)
             (plugin / 'plugin.yaml').write_text('version: 0.2.4\n')
+            if legacy_skill is not None:
+                legacy_dir = root / 'hermes/skills/hirey-hi'
+                legacy_dir.mkdir(parents=True)
+                (legacy_dir / 'SKILL.md').write_text(legacy_skill)
             commands = {
                 'hermes': '#!/bin/sh\nexit 0\n',
                 'curl': '#!/bin/sh\nprintf "%s\\n" "$*" >> "$TEST_CALLS"\ncase "$*" in *oauth/token*) printf "%s" "${TEST_TOKEN_RESPONSE:-$TEST_RESPONSE}" ;; *) printf "%s" "$TEST_RESPONSE" ;; esac\n',
@@ -48,6 +53,9 @@ class InstallerSafety(unittest.TestCase):
                                         env=env, capture_output=True, text=True)
             self.calls = (root / 'calls').read_text() if (root / 'calls').exists() else ''
             self.marker = (creds.parent / '.registration-pending.json').exists()
+            self.legacy_skill_active = (root / 'hermes/skills/hirey-hi/SKILL.md').exists()
+            disabled = root / 'hermes/disabled-skills'
+            self.disabled_skills = sorted(path.name for path in disabled.iterdir()) if disabled.exists() else []
             return result, creds.read_text() if creds.exists() else None, (root / 'calls').exists()
 
     def test_corrupt_existing_identity_never_registers_or_changes_file(self):
@@ -127,6 +135,22 @@ class InstallerSafety(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIsNone(saved)
         self.assertFalse(called)
+
+    def test_retired_inbox_wrapper_is_quarantined_but_other_user_skill_is_preserved(self):
+        fresh = json.dumps(dict(client_id='existing', client_secret='fake-secret', audience='hirey-hi',
+                                agent_id='test-agent', access_token='fake-token',
+                                access_token_issued_at=4102444800, access_token_expires_in=3600))
+        retired = 'name: hirey-hi\nWeb inbox: https://hi.hirey.ai/inbox\n'
+        result, _, _ = self.run_install(fresh, legacy_skill=retired)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.legacy_skill_active)
+        self.assertEqual(self.disabled_skills, ['hirey-hi-retired-inbox'])
+
+        custom = 'name: hirey-hi\nUser-maintained workflow without a retired URL.\n'
+        result, _, _ = self.run_install(fresh, legacy_skill=custom)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.legacy_skill_active)
+        self.assertEqual(self.disabled_skills, [])
 
 
 if __name__ == '__main__':

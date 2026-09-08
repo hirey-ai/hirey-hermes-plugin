@@ -35,6 +35,7 @@ PLUGIN_REPO="${PLUGIN_REPO:-hirey-ai/hirey-hermes-plugin}"
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 SKILLS_CATEGORY="${SKILLS_CATEGORY:-communication}"
 SKILLS_DIR="$HERMES_HOME/skills/$SKILLS_CATEGORY"
+LEGACY_HIREY_SKILL_DIR="$HERMES_HOME/skills/hirey-hi"
 CRED_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/hi"
 CRED_FILE="$CRED_DIR/credentials.json"
 
@@ -105,6 +106,22 @@ PLUGIN_DIR="$HERMES_HOME/plugins/hirey-hi"
 
 # ─── 2. Drop SKILL.md files into the user's skill tree ───────────────────
 step "Installing SKILL.md files into $SKILLS_DIR"
+# Hermes can learn a host-local `hirey-hi` wrapper from an old conversation. A
+# known bad wrapper advertised the retired hi.hirey.ai/inbox route and could be
+# selected instead of the plugin-owned hi-events Skill. Quarantine only that
+# exact bad class, keep a recoverable copy, and leave every other user-authored
+# Skill untouched.
+if [ -f "$LEGACY_HIREY_SKILL_DIR/SKILL.md" ] \
+  && grep -Fq 'https://hi.hirey.ai/inbox' "$LEGACY_HIREY_SKILL_DIR/SKILL.md"; then
+  DISABLED_SKILLS_DIR="$HERMES_HOME/disabled-skills"
+  mkdir -p "$DISABLED_SKILLS_DIR"
+  LEGACY_BACKUP="$DISABLED_SKILLS_DIR/hirey-hi-retired-inbox"
+  if [ -e "$LEGACY_BACKUP" ]; then
+    LEGACY_BACKUP="$LEGACY_BACKUP-$(date +%Y%m%d%H%M%S)"
+  fi
+  mv "$LEGACY_HIREY_SKILL_DIR" "$LEGACY_BACKUP"
+  warn "Quarantined a conflicting legacy hirey-hi Skill: $LEGACY_BACKUP"
+fi
 mkdir -p "$SKILLS_DIR"
 for name in hi-onboard hi-use hi-events hi-repair; do
   if [ -f "$PLUGIN_DIR/skills/$name/SKILL.md" ]; then

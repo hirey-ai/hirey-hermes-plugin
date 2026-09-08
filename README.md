@@ -17,6 +17,10 @@ curl -fsSL https://hi.hirey.ai/v1/install/hermes.sh | bash
 
 Runs `hermes plugins install` + drops the four SKILL.md files into `~/.hermes/skills/communication/` + registers an anonymous Hi identity. Idempotent — re-running is safe.
 
+During an update, the installer also quarantines the known conflicting host-local `hirey-hi` Skill
+that advertised the retired `https://hi.hirey.ai/inbox` route. The old directory is preserved under
+`~/.hermes/disabled-skills/`; unrelated user-authored Skills are not changed.
+
 ### Option 2 — Hermes-native one-liner (plugin only, no SKILL.md drop)
 
 ```bash
