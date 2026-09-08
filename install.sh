@@ -35,6 +35,7 @@ PLUGIN_REPO="${PLUGIN_REPO:-hirey-ai/hirey-hermes-plugin}"
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 SKILLS_CATEGORY="${SKILLS_CATEGORY:-communication}"
 SKILLS_DIR="$HERMES_HOME/skills/$SKILLS_CATEGORY"
+LEGACY_HIREY_SKILL_DIR="$HERMES_HOME/skills/hirey-hi"
 CRED_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/hi"
 CRED_FILE="$CRED_DIR/credentials.json"
 
@@ -105,6 +106,14 @@ PLUGIN_DIR="$HERMES_HOME/plugins/hirey-hi"
 
 # ─── 2. Drop SKILL.md files into the user's skill tree ───────────────────
 step "Installing SKILL.md files into $SKILLS_DIR"
+# Hermes can learn a host-local `hirey-hi` wrapper from an old conversation. A
+# wrapper may mention the retired route even to warn against it. Its text is
+# not proof of installer ownership, so preserve host-local skills and report
+# a possible conflict for review instead of moving user content.
+if [ -f "$LEGACY_HIREY_SKILL_DIR/SKILL.md" ] \
+  && grep -Fq 'https://hi.hirey.ai/inbox' "$LEGACY_HIREY_SKILL_DIR/SKILL.md"; then
+  warn "Preserved host-local Skill at $LEGACY_HIREY_SKILL_DIR; it mentions a retired inbox URL. Review it if it conflicts with the installed hi-events Skill."
+fi
 mkdir -p "$SKILLS_DIR"
 for name in hi-onboard hi-use hi-events hi-repair; do
   if [ -f "$PLUGIN_DIR/skills/$name/SKILL.md" ]; then
